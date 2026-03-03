@@ -1,0 +1,8 @@
+node_modules/
+db.sqlite
+.env
+*.log
+
+.vs/
+public/.vs/
+**/*.vsidx

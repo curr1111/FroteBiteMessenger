@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FroteBiteMessenger — Регистрация</title>
+  <link rel="stylesheet" href="/brand.css">
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-logo" id="authLogo"></div>
+
+    <main class="shell">
+      <h1>Регистрация</h1>
+      <p class="sub">Создай аккаунт, чтобы начать переписку.</p>
+
+      <label>Почта</label>
+      <input id="email" type="email" placeholder="name@example.com" autocomplete="email">
+
+      <label>Пароль</label>
+      <input id="password" type="password" placeholder="минимум 8 символов" autocomplete="new-password">
+
+      <button class="btn" id="btn">Зарегистрироваться</button>
+
+      <div class="notice" id="notice"></div>
+
+      <div class="linkline" id="toLogin">
+        Уже есть аккаунт? <a href="/login.html">Войти</a>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { logoSVG } from "/brand.js";
+
+    document.getElementById("authLogo").innerHTML = `
+      ${logoSVG(56)}
+      <div class="title">FroteBiteMessenger</div>
+    `;
+
+    const notice = document.getElementById("notice");
+    const toLogin = document.getElementById("toLogin");
+
+    function showNotice(t){ notice.textContent = t; notice.classList.add("show"); }
+    function showLoginLine(){ toLogin.classList.add("show"); }
+
+    document.getElementById("btn").addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      notice.classList.remove("show");
+
+      try{
+        const res = await fetch("/api/register", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json().catch(()=> ({}));
+
+        if(res.ok){
+          showNotice("Аккаунт создан ✅ Теперь войди.");
+          showLoginLine();
+          return;
+        }
+        if(res.status === 409){
+          showNotice("Такой аккаунт уже существует.");
+          showLoginLine();
+          return;
+        }
+        showNotice(data.error || "Ошибка регистрации");
+      }catch(e){
+        showNotice("Ошибка сети: " + e.message);
+      }
+    });
+  </script>
+</body>
+</html>

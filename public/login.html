@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FroteBiteMessenger — Вход</title>
+  <link rel="stylesheet" href="/brand.css">
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-logo" id="authLogo"></div>
+
+    <main class="shell">
+      <h1>Войти</h1>
+      <p class="sub">Введи почту и пароль.</p>
+
+      <label>Почта</label>
+      <input id="email" type="email" placeholder="name@example.com" autocomplete="email">
+
+      <label>Пароль</label>
+      <input id="password" type="password" placeholder="********" autocomplete="current-password">
+
+      <button class="btn" id="btn">Войти</button>
+
+      <div class="notice" id="notice"></div>
+
+      <div class="linkline show">
+        Нет аккаунта? <a href="/register.html">Зарегистрироваться</a>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { logoSVG, api, saveSession, loadSession } from "/brand.js";
+
+    document.getElementById("authLogo").innerHTML = `
+      ${logoSVG(56)}
+      <div class="title">FroteBiteMessenger</div>
+    `;
+
+    const existing = loadSession();
+    if(existing?.userId) location.href = "/app.html";
+
+    const notice = document.getElementById("notice");
+    const showNotice = (t)=>{ notice.textContent=t; notice.classList.add("show"); };
+
+    document.getElementById("btn").addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      notice.classList.remove("show");
+
+      try{
+        const data = await api("/api/login", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ email, password })
+        });
+        saveSession({ userId: data.userId, email: data.email, nickname: data.nickname || null });
+        location.href = "/app.html";
+      }catch(e){
+        showNotice("Ошибка входа: " + e.message);
+      }
+    });
+  </script>
+</body>
+</html>
