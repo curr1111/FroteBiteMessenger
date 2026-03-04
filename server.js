@@ -25,7 +25,8 @@ function ensureSchema() {
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        nickname TEXT
+        nickname TEXT,
+        phone TEXT
       )
     `);
 
@@ -53,16 +54,20 @@ function ensureSchema() {
       )
     `);
 
-    // ensure columns exist (safe)
+    // ensure columns exist (safe migrations)
     db.all(`PRAGMA table_info(users)`, (err, cols) => {
       if (err) return console.error(err);
-      const hasNick = (cols || []).some(c => c.name === "nickname");
+
+      const hasNick = (cols || []).some((c) => c.name === "nickname");
       if (!hasNick) db.run(`ALTER TABLE users ADD COLUMN nickname TEXT`);
+
+      const hasPhone = (cols || []).some((c) => c.name === "phone");
+      if (!hasPhone) db.run(`ALTER TABLE users ADD COLUMN phone TEXT`);
     });
 
     db.all(`PRAGMA table_info(messages)`, (err, cols) => {
       if (err) return console.error(err);
-      const hasReply = (cols || []).some(c => c.name === "reply_to_message_id");
+      const hasReply = (cols || []).some((c) => c.name === "reply_to_message_id");
       if (!hasReply) db.run(`ALTER TABLE messages ADD COLUMN reply_to_message_id INTEGER`);
     });
   });
@@ -73,9 +78,26 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+// default page
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "register.html"));
 });
+
+// ----------------- WebSocket helpers -----------------
+/**
+ * client connects to ws://host/ws?userId=123
+ * We keep mapping userId -> set of sockets.
+ */
+const userSockets = new Map(); // userId -> Set(ws)
+
+function wsBroadcastToUser(userId, obj) {
+  const set = userSockets.get(Number(userId));
+  if (!set) return;
+  const data = JSON.stringify(obj);
+  for (const ws of set) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(data);
+  }
+}
 
 // ----------------- Auth -----------------
 app.post("/api/register", async (req, res) => {
@@ -88,8 +110,8 @@ app.post("/api/register", async (req, res) => {
   const createdAt = new Date().toISOString();
 
   db.run(
-    `INSERT INTO users (email, password_hash, created_at, nickname) VALUES (?, ?, ?, ?)`,
-    [String(email).trim().toLowerCase(), hash, createdAt, null],
+    `INSERT INTO users (email, password_hash, created_at, nickname, phone) VALUES (?, ?, ?, ?, ?)`,
+    [String(email).trim().toLowerCase(), hash, createdAt, null, null],
     function (err) {
       if (err) {
         if (err.message.includes("UNIQUE")) return res.status(409).json({ error: "Email already exists" });
@@ -124,7 +146,19 @@ app.get("/api/profile", (req, res) => {
   const userId = Number(req.query.userId);
   if (!userId) return res.status(400).json({ error: "Missing userId" });
 
-  db.get(`SELECT id, email, nickname FROM users WHERE id = ?`, [userId], (err, row) => {
+  db.get(`SELECT id, email, nickname, created_at, phone FROM users WHERE id = ?`, [userId], (err, row) => {
+    if (err) return res.status(500).json({ error: "DB error" });
+    if (!row) return res.status(404).json({ error: "Not found" });
+    res.json({ ok: true, user: row });
+  });
+});
+
+// profile of any user by id (for clicking nickname in chat)
+app.get("/api/user", (req, res) => {
+  const id = Number(req.query.id);
+  if (!id) return res.status(400).json({ error: "Missing id" });
+
+  db.get(`SELECT id, email, nickname, created_at, phone FROM users WHERE id = ?`, [id], (err, row) => {
     if (err) return res.status(500).json({ error: "DB error" });
     if (!row) return res.status(404).json({ error: "Not found" });
     res.json({ ok: true, user: row });
@@ -142,10 +176,26 @@ app.post("/api/profile/nickname", (req, res) => {
   db.run(`UPDATE users SET nickname = ? WHERE id = ?`, [nn, uid], function (err) {
     if (err) return res.status(500).json({ error: "DB error" });
 
-    // notify connected clients about profile update
     wsBroadcastToUser(uid, { type: "profile:update", userId: uid, nickname: nn });
 
     res.json({ ok: true, nickname: nn });
+  });
+});
+
+app.post("/api/profile/phone", (req, res) => {
+  const { userId, phone } = req.body || {};
+  const uid = Number(userId);
+  if (!uid) return res.status(400).json({ error: "Missing userId" });
+
+  const p = String(phone ?? "").trim().slice(0, 32);
+  if (p.length < 6) return res.status(400).json({ error: "Phone too short" });
+
+  db.run(`UPDATE users SET phone = ? WHERE id = ?`, [p, uid], function (err) {
+    if (err) return res.status(500).json({ error: "DB error" });
+
+    wsBroadcastToUser(uid, { type: "profile:update", userId: uid });
+
+    res.json({ ok: true, phone: p });
   });
 });
 
@@ -177,7 +227,6 @@ app.post("/api/messages/send", (req, res) => {
 
       const messageId = this.lastID;
 
-      // push event to both users
       const payload = {
         type: "message:new",
         message: {
@@ -186,8 +235,8 @@ app.post("/api/messages/send", (req, res) => {
           receiver_id: Number(receiverId),
           text: trimmed,
           created_at: createdAt,
-          reply_to_message_id: replyId
-        }
+          reply_to_message_id: replyId,
+        },
       };
 
       wsBroadcastToUser(Number(senderId), payload);
@@ -220,175 +269,4 @@ app.get("/api/messages/thread", (req, res) => {
       ORDER BY m.id ASC
       LIMIT 600
     `,
-    [me, withUser, withUser, me],
-    (err, rows) => {
-      if (err) return res.status(500).json({ error: "DB error" });
-      res.json({ ok: true, messages: rows });
-    }
-  );
-});
-
-// mark read: set last read message id for this dialog
-app.post("/api/read", (req, res) => {
-  const { userId, otherId, lastReadMessageId } = req.body || {};
-  const uid = Number(userId);
-  const oid = Number(otherId);
-  const mid = Number(lastReadMessageId);
-
-  if (!uid || !oid || !mid) return res.status(400).json({ error: "Missing fields" });
-
-  const now = new Date().toISOString();
-
-  db.run(
-    `
-      INSERT INTO read_state (user_id, other_id, last_read_message_id, updated_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(user_id, other_id)
-      DO UPDATE SET last_read_message_id = MAX(read_state.last_read_message_id, excluded.last_read_message_id),
-                   updated_at = excluded.updated_at
-    `,
-    [uid, oid, mid, now],
-    function (err) {
-      if (err) return res.status(500).json({ error: "DB error" });
-
-      // notify my other clients (same user) to sync read state
-      wsBroadcastToUser(uid, { type: "read:update", userId: uid, otherId: oid, lastReadMessageId: mid });
-
-      res.json({ ok: true });
-    }
-  );
-});
-
-// dialogs: last message + unread count + user info (this is what UI uses)
-app.get("/api/dialogs", (req, res) => {
-  const me = Number(req.query.me);
-  if (!me) return res.status(400).json({ error: "Missing query param me" });
-
-  db.all(
-    `
-      WITH d AS (
-        SELECT
-          CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END AS other_id,
-          MAX(id) AS last_id
-        FROM messages
-        WHERE sender_id = ? OR receiver_id = ?
-        GROUP BY other_id
-      )
-      SELECT
-        d.other_id,
-        d.last_id,
-        m.sender_id AS last_sender_id,
-        m.receiver_id AS last_receiver_id,
-        m.text AS last_text,
-        m.created_at AS last_created_at,
-        u.id AS user_id,
-        u.nickname AS nickname,
-        u.email AS email,
-        COALESCE((
-          SELECT COUNT(1)
-          FROM messages im
-          LEFT JOIN read_state rs
-            ON rs.user_id = ? AND rs.other_id = d.other_id
-          WHERE im.sender_id = d.other_id
-            AND im.receiver_id = ?
-            AND im.id > COALESCE(rs.last_read_message_id, 0)
-        ), 0) AS unread_count
-      FROM d
-      JOIN messages m ON m.id = d.last_id
-      JOIN users u ON u.id = d.other_id
-      ORDER BY d.last_id DESC
-    `,
-    [me, me, me, me, me],
-    (err, rows) => {
-      if (err) return res.status(500).json({ error: "DB error" });
-      res.json({ ok: true, dialogs: rows || [] });
-    }
-  );
-});
-
-// delete message
-app.delete("/api/messages/:id", (req, res) => {
-  const messageId = Number(req.params.id);
-  const requesterId = Number(req.query.requesterId);
-  if (!messageId || !requesterId) return res.status(400).json({ error: "Missing params" });
-
-  db.get(
-    `SELECT id, sender_id, receiver_id FROM messages WHERE id = ?`,
-    [messageId],
-    (err, row) => {
-      if (err) return res.status(500).json({ error: "DB error" });
-      if (!row) return res.status(404).json({ error: "Not found" });
-
-      const ok = (row.sender_id === requesterId || row.receiver_id === requesterId);
-      if (!ok) return res.status(403).json({ error: "Forbidden" });
-
-      db.run(`DELETE FROM messages WHERE id = ?`, [messageId], (e) => {
-        if (e) return res.status(500).json({ error: "DB error" });
-
-        // broadcast delete event to both sides
-        const payload = { type: "message:delete", messageId: messageId };
-        wsBroadcastToUser(row.sender_id, payload);
-        wsBroadcastToUser(row.receiver_id, payload);
-
-        res.json({ ok: true });
-      });
-    }
-  );
-});
-
-// ----------------- WebSocket -----------------
-/**
- * client connects to ws://localhost:3000/ws?userId=123
- * We keep mapping userId -> set of sockets.
- */
-const userSockets = new Map(); // userId -> Set(ws)
-
-function wsBroadcastToUser(userId, obj) {
-  const set = userSockets.get(Number(userId));
-  if (!set) return;
-  const data = JSON.stringify(obj);
-  for (const ws of set) {
-    if (ws.readyState === WebSocket.OPEN) ws.send(data);
-  }
-}
-
-wss.on("connection", (ws, req) => {
-  try {
-    const url = new URL(req.url, "http://localhost");
-    if (url.pathname !== "/ws") {
-      ws.close();
-      return;
-    }
-    const userId = Number(url.searchParams.get("userId"));
-    if (!userId) {
-      ws.close();
-      return;
-    }
-
-    ws.__userId = userId;
-
-    if (!userSockets.has(userId)) userSockets.set(userId, new Set());
-    userSockets.get(userId).add(ws);
-
-    ws.send(JSON.stringify({ type: "ws:ready" }));
-
-    ws.on("close", () => {
-      const set = userSockets.get(userId);
-      if (set) {
-        set.delete(ws);
-        if (set.size === 0) userSockets.delete(userId);
-      }
-    });
-
-    // we don't trust client messages yet — ignore by default
-    ws.on("message", () => {});
-  } catch {
-    ws.close();
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, () => {
-  console.log("FroteBiteMessenger ✅ http://localhost:" + PORT);
-});
+    [me, withUser, withUser

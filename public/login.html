@@ -2,69 +2,85 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Войти — FroteBiteMessenger</title>
-  <link rel="stylesheet" href="./brand.css" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FroteBiteMessenger — Вход</title>
+  <link rel="stylesheet" href="brand.css" />
 </head>
-<body class="theme-ember">
-  <div class="bg"></div>
+<body class="page auth-page" data-page="login">
+  <div id="fadeOverlay" class="fade-overlay"></div>
 
-  <header class="topbar">
+  <header class="topbar auth-topbar">
     <div class="brand">
-      <div class="logo"><span class="logo-f">F</span><span class="logo-flame"></span></div>
+      <div class="logo" aria-label="FroteBite logo">
+        <svg viewBox="0 0 64 64" class="logo-svg" role="img" aria-hidden="true">
+          <defs>
+            <linearGradient id="flameGrad2" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#ffb23c"/>
+              <stop offset="0.55" stop-color="#ff6a00"/>
+              <stop offset="1" stop-color="#ff2a2a"/>
+            </linearGradient>
+            <linearGradient id="fGrad2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#ff3b3b"/>
+              <stop offset="1" stop-color="#b30000"/>
+            </linearGradient>
+            <filter id="softGlow2" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feColorMatrix in="blur" type="matrix"
+                values="1 0 0 0 0
+                        0 0.7 0 0 0
+                        0 0 0.2 0 0
+                        0 0 0 0.9 0" result="glow"/>
+              <feMerge>
+                <feMergeNode in="glow"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+          <path filter="url(#softGlow2)" fill="url(#flameGrad2)"
+                d="M36 6c2 10-6 12-6 18 0 4 3 6 3 10 0 5-6 7-6 13 0 7 6 11 13 11 10 0 18-7 18-19 0-13-10-18-11-33-5 5-7 10-11 0z"/>
+          <circle cx="28.5" cy="40" r="15" fill="rgba(0,0,0,0.18)"/>
+          <text x="23" y="46" font-size="22" font-weight="800" fill="url(#fGrad2)"
+                font-family="Segoe UI, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif">F</text>
+        </svg>
+      </div>
+
       <div class="brand-text">
-        <div class="brand-name">FroteBiteMessenger</div>
-        <div class="brand-sub">Sign in</div>
+        <div class="brand-title">FroteBiteMessenger</div>
+        <div class="brand-sub">Вход</div>
       </div>
     </div>
   </header>
 
-  <main class="auth">
+  <main class="auth-main">
     <section class="auth-card glass">
-      <div class="auth-title">Войти</div>
-      <div class="auth-sub">Введи почту и пароль.</div>
+      <h1 class="auth-title">Войти</h1>
+      <p class="auth-hint">Введи почту и пароль.</p>
 
-      <div class="auth-row">
-        <input id="email" class="input" placeholder="Почта" autocomplete="email">
-        <input id="pass" class="input" placeholder="Пароль" type="password" autocomplete="current-password">
-        <button id="go" class="btn">Войти</button>
-      </div>
+      <form id="loginForm" class="form">
+        <label class="field">
+          <span class="label">Почта</span>
+          <input id="loginEmail" type="email" autocomplete="email" placeholder="example@gmail.com" required />
+        </label>
 
-      <div id="err" class="err" hidden></div>
+        <label class="field">
+          <span class="label">Пароль</span>
+          <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••" required />
+        </label>
 
-      <div class="auth-links">
-        Нет аккаунта? <a href="./register.html">Зарегистрироваться</a>
+        <button class="btn primary" type="submit">
+          Войти
+        </button>
+
+        <div id="authError" class="auth-error" role="status" aria-live="polite"></div>
+      </form>
+
+      <div class="auth-switch">
+        <span>Нет аккаунта?</span>
+        <a class="link" href="register.html">Зарегистрироваться</a>
       </div>
     </section>
   </main>
 
-  <script>
-    const $ = (s)=>document.querySelector(s);
-    const err = $("#err");
-
-    $("#go").addEventListener("click", async () => {
-      err.hidden = true;
-      const email = $("#email").value.trim();
-      const password = $("#pass").value;
-
-      try{
-        const r = await fetch("/api/login", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ email, password })
-        });
-        const j = await r.json();
-        if(!r.ok) throw new Error(j.error || "Ошибка");
-
-        localStorage.setItem("fb_userId", String(j.userId));
-        localStorage.setItem("fb_email", j.email);
-        localStorage.setItem("fb_nickname", j.nickname || "");
-        location.href = "./chat.html";
-      }catch(e){
-        err.textContent = e.message;
-        err.hidden = false;
-      }
-    });
-  </script>
+  <script src="brand.js"></script>
 </body>
 </html>

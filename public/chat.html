@@ -2,153 +2,312 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Чаты — FroteBiteMessenger</title>
-  <link rel="stylesheet" href="./brand.css" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FroteBiteMessenger — Чаты</title>
+  <link rel="stylesheet" href="brand.css" />
 </head>
+<body class="page app-page" data-page="chat">
+  <div id="fadeOverlay" class="fade-overlay"></div>
 
-<body class="theme-ember">
-  <div class="bg"></div>
-
-  <header class="topbar">
+  <header class="topbar app-topbar">
     <div class="brand">
-      <div class="logo"><span class="logo-f">F</span><span class="logo-flame"></span></div>
+      <div class="logo">
+        <svg viewBox="0 0 64 64" class="logo-svg" role="img" aria-hidden="true">
+          <defs>
+            <linearGradient id="flameGrad3" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#ffb23c"/>
+              <stop offset="0.55" stop-color="#ff6a00"/>
+              <stop offset="1" stop-color="#ff2a2a"/>
+            </linearGradient>
+            <linearGradient id="fGrad3" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#ff3b3b"/>
+              <stop offset="1" stop-color="#b30000"/>
+            </linearGradient>
+          </defs>
+          <path fill="url(#flameGrad3)"
+                d="M36 6c2 10-6 12-6 18 0 4 3 6 3 10 0 5-6 7-6 13 0 7 6 11 13 11 10 0 18-7 18-19 0-13-10-18-11-33-5 5-7 10-11 0z"/>
+          <circle cx="28.5" cy="40" r="15" fill="rgba(0,0,0,0.18)"/>
+          <text x="23" y="46" font-size="22" font-weight="800" fill="url(#fGrad3)"
+                font-family="Segoe UI, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif">F</text>
+        </svg>
+      </div>
       <div class="brand-text">
-        <div class="brand-name">FroteBiteMessenger</div>
-        <div class="brand-sub">Chats</div>
+        <div class="brand-title">FroteBiteMessenger</div>
+        <div id="topStatus" class="brand-sub">Подключение…</div>
       </div>
     </div>
 
-    <div class="top-actions" style="display:flex; gap:10px;">
-      <button id="btnProfile" class="btn pill">Ваш профиль</button>
-      <button id="btnLogout" class="btn pill ghost">Выйти</button>
+    <div class="top-actions">
+      <button id="btnSettings" class="btn ghost" type="button" title="Настройки">
+        <span class="icon">
+          <!-- gear -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8.5-3.5a7.7 7.7 0 0 0-.12-1.35l2.02-1.57-2-3.46-2.45.93a7.9 7.9 0 0 0-2.34-1.35L13.2 2h-4.4L8.4 5.2A7.9 7.9 0 0 0 6.06 6.55l-2.45-.93-2 3.46 2.02 1.57A7.7 7.7 0 0 0 3.5 12c0 .46.04.91.12 1.35L1.6 14.92l2 3.46 2.45-.93c.7.55 1.5 1 2.34 1.35L8.8 22h4.4l.4-3.2c.84-.35 1.64-.8 2.34-1.35l2.45.93 2-3.46-2.02-1.57c.08-.44.12-.89.12-1.35Z"/>
+          </svg>
+        </span>
+        Настройки
+      </button>
+
+      <button id="btnLogout" class="btn ghost" type="button">Выйти</button>
     </div>
   </header>
 
-  <main class="shell">
-    <section class="card glass">
-      <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:6px 6px 14px;">
-        <div class="section-hint">Тема приложения:</div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="btn small ghost themeBtn" data-theme="ember">Ember</button>
-          <button class="btn small ghost themeBtn" data-theme="sunset">Sunset</button>
-          <button class="btn small ghost themeBtn" data-theme="midnight">Midnight</button>
-          <button class="btn small ghost themeBtn" data-theme="aurora">Aurora</button>
+  <main class="app-main">
+    <section class="glass app-shell">
+      <!-- body -->
+      <div id="viewContainer" class="view-container">
+        <!-- VIEW: CHATS -->
+        <div id="viewChats" class="view view-active">
+          <div class="grid">
+            <!-- left -->
+            <aside class="panel left">
+              <div class="panel-head">
+                <div>
+                  <div class="panel-title">Диалоги</div>
+                  <div class="panel-sub">Показываются только чаты с перепиской</div>
+                </div>
+                <button id="btnAddUser" class="btn small" type="button">+ Добавить</button>
+              </div>
+
+              <div class="add-user">
+                <div class="add-user-title">Введите почту или ID</div>
+
+                <div class="add-user-row">
+                  <input id="searchEmail" class="input" placeholder="почта" />
+                  <input id="searchId" class="input" placeholder="id" inputmode="numeric" />
+                </div>
+
+                <div id="searchHint" class="soft-hint">Введите почту или id — найдём пользователя</div>
+                <div id="searchError" class="soft-error"></div>
+              </div>
+
+              <div id="dialogs" class="dialogs"></div>
+            </aside>
+
+            <!-- right -->
+            <section class="panel right">
+              <div class="panel-head">
+                <div class="chat-title-wrap">
+                  <div class="panel-title">Диалог</div>
+                  <button id="btnOpenUserCard" class="btn linkbtn" type="button" disabled title="Профиль собеседника">
+                    <span id="chatWithName">—</span>
+                  </button>
+                </div>
+
+                <div class="head-actions">
+                  <button id="btnCall" class="btn small" type="button" disabled>Позвонить</button>
+                  <button id="btnDone" class="btn small" type="button">Готово</button>
+                </div>
+              </div>
+
+              <div id="chatArea" class="chat-area">
+                <!-- placeholder when no dialog selected -->
+                <div id="noChat" class="no-chat">
+                  <div class="no-chat-card">
+                    <div class="no-chat-title">Выберите диалог слева</div>
+                    <div class="no-chat-sub">Или добавьте пользователя по почте/ID</div>
+                  </div>
+                </div>
+
+                <!-- messages -->
+                <div id="threadWrap" class="thread-wrap hidden">
+                  <div id="thread" class="thread"></div>
+
+                  <div id="emptyThread" class="empty-thread hidden">
+                    <div class="empty-thread-box">В данном чате пока что нет сообщений</div>
+                    <div class="empty-thread-sub">Начните первыми разговор</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="composer">
+                <div id="formatBar" class="format-bar hidden">
+                  <button class="btn small" type="button" data-format="bold">Жирный</button>
+                  <button class="btn small" type="button" data-format="italic">Курсив</button>
+                  <button class="btn small" type="button" data-format="underline">Подчеркнуть</button>
+                </div>
+
+                <!-- reply box -->
+                <div id="replyBox" class="reply-box hidden">
+                  <div class="reply-top">
+                    <span class="reply-label">Ответ</span>
+                    <button id="replyCancel" class="btn ghost small" type="button">✕</button>
+                  </div>
+                  <div id="replyPreview" class="reply-preview"></div>
+                </div>
+
+                <!-- animated editor (contenteditable) -->
+                <div id="editor" class="editor" contenteditable="true" spellcheck="false" data-placeholder="Напишите сообщение…"></div>
+
+                <div class="composer-actions">
+                  <button id="btnRefresh" class="btn" type="button">Обновить</button>
+                  <button id="btnSend" class="btn primary" type="button">Отправить</button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- VIEW: CALLS -->
+        <div id="viewCalls" class="view">
+          <div class="calls">
+            <div class="calls-head">
+              <div>
+                <div class="panel-title">Звонки</div>
+                <div class="panel-sub">Пока без звука — демо-режим</div>
+              </div>
+            </div>
+
+            <div class="calls-body glass-soft">
+              <div class="calls-empty">
+                <div class="empty-thread-box">Тут будут звонки</div>
+                <div class="empty-thread-sub">Нажми “Позвонить” в чате, чтобы протестировать</div>
+              </div>
+
+              <div id="callsLog" class="calls-log"></div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="layout">
-        <aside class="left">
-          <div class="left-head">
-            <div>
-              <div class="left-title">Диалоги</div>
-              <div class="section-hint">Показываются только чаты с перепиской</div>
-            </div>
-            <button id="btnAdd" class="btn small">+ Добавить</button>
-          </div>
-
-          <div class="search">
-            <div class="section-hint" style="margin-bottom:8px;">Введите почту или ID</div>
-            <div class="search-row">
-              <input id="searchEmail" class="input" placeholder="почта" autocomplete="off" />
-              <input id="searchId" class="input" placeholder="id" autocomplete="off" />
-            </div>
-            <div id="searchErr" class="search-err" hidden>Почта или айди введены неверно, никого не найдено</div>
-          </div>
-
-          <div id="usersList" class="users"></div>
-        </aside>
-
-        <section class="right">
-          <!-- чат скрыт, пока никто не выбран -->
-          <div id="chatWrap" class="chat-wrap" hidden>
-            <div class="chat-head">
-              <div class="chat-title" id="chatTitle">Диалог</div>
-              <div class="chat-head-actions">
-                <button id="btnCalls" class="btn small ghost">Позвонить</button>
-                <button id="btnDone" class="btn small">Готово</button>
-              </div>
-            </div>
-
-            <div id="messages" class="messages"></div>
-
-            <div class="composer">
-              <div id="formatBar" class="formatbar" hidden>
-                <button class="fmt" data-fmt="b"><b>Жирный</b></button>
-                <button class="fmt" data-fmt="i"><i>Курсив</i></button>
-                <button class="fmt" data-fmt="u"><u>Подчеркнуть</u></button>
-              </div>
-
-              <textarea id="msgInput" class="textarea" placeholder="Напиши сообщение..."></textarea>
-
-              <div id="replyBanner" class="replybox" hidden></div>
-
-              <div class="composer-actions">
-                <button id="btnRefresh" class="btn wide ghost">Обновить</button>
-                <button id="btnSend" class="btn wide">Отправить</button>
-              </div>
-            </div>
-          </div>
-
-          <div id="callsWrap" class="calls-wrap" hidden>
-            <div class="chat-head">
-              <div class="chat-title">Звонки</div>
-              <div class="chat-head-actions">
-                <button id="btnBackToChats" class="btn small">Назад</button>
-              </div>
-            </div>
-            <div style="padding:18px; color: var(--muted);">
-              Пока без звука 🙂 Тут будет история звонков и кнопка «позвонить».
-            </div>
-          </div>
-        </section>
+      <!-- bottom tabs (отдельное окно) -->
+      <div class="bottom-tabs glass-soft">
+        <button id="tabChats" class="tab active" type="button">Чаты</button>
+        <button id="tabCalls" class="tab" type="button">Звонки</button>
       </div>
     </section>
-
-    <nav class="bottomnav glass" aria-label="Навигация">
-      <button class="navbtn active" data-view="chats">Чаты</button>
-      <button class="navbtn" data-view="calls">Звонки</button>
-    </nav>
   </main>
 
-  <!-- Profile modal -->
-  <div id="modal" class="modal" hidden>
-    <div class="modal-card glass">
-      <div class="modal-head">
-        <div class="modal-title">Ваш профиль</div>
-        <button id="modalClose" class="btn small ghost">✕</button>
+  <!-- SETTINGS MODAL -->
+  <div id="modalBackdrop" class="modal-backdrop hidden"></div>
+
+  <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Настройки">
+    <div class="modal-head">
+      <div class="modal-title">Настройки</div>
+      <button id="modalClose" class="btn ghost small" type="button">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="settings-menu">
+        <button id="openThemes" class="settings-item" type="button">
+          <span class="sicon">
+            <!-- palette -->
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3a9 9 0 1 0 0 18h1a3 3 0 0 0 0-6h-2a1 1 0 1 1 0-2h3a4 4 0 0 0 0-8h-2Z"/>
+            </svg>
+          </span>
+          Темы
+        </button>
+
+        <button id="openProfile" class="settings-item" type="button">
+          <span class="sicon">
+            <!-- user -->
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-5 0-9 2.4-9 5.5V21h18v-1.5C21 16.4 17 14 12 14Z"/>
+            </svg>
+          </span>
+          Мой профиль
+        </button>
       </div>
 
-      <div class="profile">
-        <div class="row">
-          <div class="label">Почта</div>
-          <div id="pEmail" class="value">—</div>
+      <div id="settingsPane" class="settings-pane">
+        <!-- Themes pane -->
+        <div id="paneThemes" class="pane hidden">
+          <div class="pane-title">Тема приложения:</div>
+          <div class="theme-row">
+            <button class="chip" type="button" data-theme="ember">Ember</button>
+            <button class="chip" type="button" data-theme="sunset">Sunset</button>
+            <button class="chip" type="button" data-theme="midnight">Midnight</button>
+            <button class="chip" type="button" data-theme="aurora">Aurora</button>
+          </div>
+          <div class="soft-hint">Aurora — зелёный по синему с лёгкой анимацией ✨</div>
         </div>
-        <div class="row">
-          <div class="label">ID</div>
-          <div id="pId" class="value">—</div>
+
+        <!-- Profile pane -->
+        <div id="paneProfile" class="pane hidden">
+          <div class="profile-card glass-soft">
+            <div class="profile-top">
+              <div class="avatar" aria-hidden="true"></div>
+              <div class="profile-main">
+                <div class="profile-nick">
+                  <span id="myNick">—</span>
+                  <button id="editNick" class="btn small" type="button">Изменить</button>
+                </div>
+                <div class="profile-sub" id="myEmail">—</div>
+              </div>
+            </div>
+
+            <div class="profile-grid">
+              <div class="kv">
+                <div class="k">Дата создания аккаунта</div>
+                <div class="v" id="myCreated">—</div>
+              </div>
+
+              <div class="kv">
+                <div class="k">ID</div>
+                <div class="v" id="myId">—</div>
+              </div>
+
+              <div class="kv kv-wide">
+                <div class="k">Номер телефона</div>
+                <div class="v v-row">
+                  <span id="myPhone">—</span>
+                  <button id="addPhone" class="btn small" type="button">Добавить</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="row">
-          <div class="label">Никнейм</div>
-          <input id="pNick" class="input" placeholder="никнейм" />
+
+        <!-- User card pane (other profile) -->
+        <div id="paneUser" class="pane hidden">
+          <div class="profile-card glass-soft">
+            <div class="profile-top">
+              <div class="avatar" aria-hidden="true"></div>
+              <div class="profile-main">
+                <div class="profile-nick">
+                  <span id="otherNick">—</span>
+                </div>
+                <div class="profile-sub" id="otherEmail">—</div>
+              </div>
+            </div>
+
+            <div class="profile-grid">
+              <div class="kv">
+                <div class="k">Дата создания аккаунта</div>
+                <div class="v" id="otherCreated">—</div>
+              </div>
+
+              <div class="kv">
+                <div class="k">ID</div>
+                <div class="v" id="otherId">—</div>
+              </div>
+
+              <div class="kv kv-wide">
+                <div class="k">Номер телефона</div>
+                <div class="v" id="otherPhone">—</div>
+              </div>
+            </div>
+
+            <div class="soft-hint">
+              Если чего-то нет — покажем “пользователь не добавил”.
+            </div>
+          </div>
         </div>
-        <div class="row actions">
-          <button id="pSave" class="btn wide">Изменить</button>
-        </div>
+
       </div>
     </div>
   </div>
 
-  <!-- Toast -->
-  <div id="toast" class="toast" hidden>
-    <div class="toast-card glass">
-      <div id="toastText" class="toast-text">Новое сообщение</div>
-      <div class="toast-bar"><div id="toastBarFill" class="toast-bar-fill"></div></div>
-    </div>
+  <!-- toast notifications -->
+  <div id="toasts" class="toasts"></div>
+
+  <!-- context menu -->
+  <div id="ctx" class="ctx hidden">
+    <button id="ctxReply" class="ctx-item" type="button">Ответить</button>
+    <button id="ctxDelete" class="ctx-item danger" type="button">Удалить</button>
   </div>
 
-  <div id="ctx" class="ctx glass" hidden></div>
-
-  <script src="./brand.js"></script>
+  <script src="brand.js"></script>
 </body>
 </html>
