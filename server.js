@@ -387,7 +387,8 @@ wss.on("connection", (ws, req) => {
   }
 });
 
-// ----------------- Start -----------------
-server.listen(3000, () => {
-  console.log("FroteBiteMessenger ✅ http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log("FroteBiteMessenger ✅ http://localhost:" + PORT);
 });
