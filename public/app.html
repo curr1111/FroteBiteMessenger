@@ -2,835 +2,170 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>FroteBiteMessenger</title>
-  <link rel="stylesheet" href="/brand.css">
+  <link rel="stylesheet" href="./brand.css" />
 </head>
-<body>
+
+<body class="theme-ember">
+  <!-- Background -->
+  <div class="bg"></div>
+
+  <!-- Top brand bar -->
   <header class="topbar">
-    <div class="brand" id="brand"></div>
-    <div style="display:flex; gap:10px; align-items:center;">
-      <div class="pill" id="nickPill">...</div>
-      <button class="btn-ghost" id="openProfile">Ваш профиль</button>
-      <button class="btn-ghost" id="logout">Выйти</button>
+    <div class="brand">
+      <div class="logo" aria-label="FroteBite logo">
+        <span class="logo-f">F</span>
+        <span class="logo-flame"></span>
+      </div>
+      <div class="brand-text">
+        <div class="brand-name">FroteBiteMessenger</div>
+        <div class="brand-sub">Web messenger</div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button id="btnProfile" class="btn pill">Ваш профиль</button>
+      <button id="btnTheme" class="btn pill ghost" title="Сменить тему">Тема</button>
     </div>
   </header>
 
-  <main class="app-wrap">
-    <!-- LEFT -->
-    <section class="panel">
-      <div class="panel-head">
-        <b>Контакты</b>
-        <span class="pill" id="leftStatus">Готово</span>
-      </div>
-
-      <div class="tabs">
-        <button class="tab active" id="tabChats">Чаты</button>
-        <button class="tab" id="tabCalls">Звонки</button>
-      </div>
-
-      <div class="user-search">
-        <div class="hint">
-          <div class="plus">+</div>
-          <div>Введите почту или id</div>
-        </div>
-
-        <div class="row">
-          <input id="findEmail" type="email" placeholder="Почта" autocomplete="off">
-          <input id="findId" type="text" inputmode="numeric" placeholder="ID" autocomplete="off">
-        </div>
-
-        <div class="find-msg" id="findMsg"></div>
-      </div>
-
-      <div class="view">
-        <div class="view-inner" id="leftView">
-          <div class="users" id="contacts"></div>
-          <div style="padding:12px; display:none;" id="callsList"></div>
+  <!-- Main card -->
+  <main class="shell">
+    <section class="card glass">
+      <div class="card-head">
+        <div class="tabs-title">Тема приложения:</div>
+        <div class="theme-pills" role="tablist" aria-label="Темы">
+          <button class="pill2 active" data-theme="ember">Ember</button>
+          <button class="pill2" data-theme="sunset">Sunset</button>
+          <button class="pill2" data-theme="midnight">Midnight</button>
+          <button class="pill2" data-theme="aurora">Aurora</button>
         </div>
       </div>
-    </section>
 
-    <!-- RIGHT -->
-    <section class="panel">
-      <div class="panel-head">
-        <b id="rightTitle">Выбери контакт</b>
-        <span class="pill" id="rightStatus">Готово</span>
-      </div>
+      <div class="layout">
+        <!-- Left: users -->
+        <aside class="left">
+          <div class="left-head">
+            <div class="left-title">Пользователи</div>
+            <button id="btnAdd" class="btn small">+ Добавить</button>
+          </div>
 
-      <div class="view">
-        <div class="view-inner" id="rightView">
-          <!-- CHAT VIEW -->
-          <div id="chatView">
-            <div class="thread" id="thread"></div>
+          <div id="userSearch" class="search">
+            <div class="search-hint">Введите почту или ID</div>
+            <div class="search-row">
+              <input id="searchEmail" class="input" placeholder="почта" autocomplete="off" />
+              <input id="searchId" class="input" placeholder="id" autocomplete="off" />
+            </div>
+            <div id="searchErr" class="search-err" hidden>Почта или ID введены неверно, никого не найдено</div>
+          </div>
+
+          <div id="usersEmpty" class="empty">
+            <div class="empty-icon">+</div>
+            <div class="empty-text">Добавь пользователя по почте или ID</div>
+          </div>
+
+          <div id="usersList" class="users"></div>
+        </aside>
+
+        <!-- Right: content -->
+        <section class="right">
+          <!-- when no chat selected -->
+          <div id="rightEmpty" class="right-empty">
+            <div class="right-empty-title">Выбери чат слева</div>
+            <div class="right-empty-sub">или добавь пользователя по почте/ID</div>
+          </div>
+
+          <!-- chat view -->
+          <div id="chatWrap" class="chat-wrap" hidden>
+            <div class="chat-head">
+              <div class="chat-title" id="chatTitle">Диалог</div>
+              <div class="chat-head-actions">
+                <button id="btnCalls" class="btn small ghost">Позвонить</button>
+                <button id="btnDone" class="btn small">Готово</button>
+              </div>
+            </div>
+
+            <div id="messages" class="messages"></div>
 
             <div class="composer">
-              <div class="reply-bar" id="replyBar">
-                <div class="reply-left">
-                  <div class="reply-title" id="replyTitle">Ответ</div>
-                  <div class="reply-text" id="replyText">...</div>
-                </div>
-                <button class="reply-x" id="replyClear">✕</button>
+              <div id="formatBar" class="formatbar" hidden>
+                <button class="fmt" data-fmt="b"><b>Жирный</b></button>
+                <button class="fmt" data-fmt="i"><i>Курсив</i></button>
+                <button class="fmt" data-fmt="u"><u>Подчеркнуть</u></button>
               </div>
 
-              <div class="editor" id="editor" contenteditable="true" data-placeholder="Напиши сообщение..."></div>
-
-              <div class="send-row">
-                <button class="btn-ghost" id="refresh">Обновить</button>
-                <button class="btn" id="send">Отправить</button>
+              <textarea id="msgInput" class="textarea" placeholder="Напиши сообщение..."></textarea>
+              <div class="composer-actions">
+                <button id="btnRefresh" class="btn wide ghost">Обновить</button>
+                <button id="btnSend" class="btn wide">Отправить</button>
               </div>
             </div>
           </div>
 
-          <!-- CALLS VIEW -->
-          <div id="callsView" style="display:none; padding:12px;">
-            <div class="sub" style="margin:0 0 10px;">
-              Пока без звука: кнопка “Позвонить” делает запись во вкладке “Звонки”.
+          <!-- Calls placeholder -->
+          <div id="callsWrap" class="calls-wrap" hidden>
+            <div class="chat-head">
+              <div class="chat-title">Звонки</div>
+              <div class="chat-head-actions">
+                <button id="btnBackToChats" class="btn small">Назад</button>
+              </div>
             </div>
-            <div id="callControls"></div>
+
+            <div class="calls-body">
+              <div class="calls-empty">
+                Пока без звука 🙂<br/>
+                Тут будет история звонков и кнопка “позвонить”.
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
       </div>
     </section>
+
+    <!-- Bottom nav -->
+    <nav class="bottomnav glass" aria-label="Навигация">
+      <button class="navbtn active" data-view="chats">Чаты</button>
+      <button class="navbtn" data-view="calls">Звонки</button>
+    </nav>
   </main>
 
-  <!-- context menu -->
-  <div class="ctx" id="ctx">
-    <button id="ctxReply">Ответить</button>
-    <button class="danger" id="ctxDelete">Удалить</button>
-  </div>
-
-  <!-- format toolbar -->
-  <div class="formatbar" id="formatbar">
-    <button class="fbtn" id="fbBold">Жирный</button>
-    <button class="fbtn" id="fbItalic">Курсив</button>
-    <button class="fbtn" id="fbUnderline">Подчеркнуть</button>
-  </div>
-
-  <!-- toasts -->
-  <div class="toast-host" id="toastHost"></div>
-
-  <!-- profile modal -->
-  <div class="modal-backdrop" id="modalBg">
-    <div class="modal" role="dialog" aria-modal="true">
+  <!-- Profile modal -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card glass">
       <div class="modal-head">
         <div class="modal-title">Ваш профиль</div>
-        <button class="modal-close" id="modalClose">Закрыть</button>
+        <button id="modalClose" class="btn small ghost">✕</button>
       </div>
-      <div class="modal-body">
-        <div class="kv"><div class="k">Никнейм</div><div class="v" id="pNick">...</div></div>
-        <div class="kv"><div class="k">Почта</div><div class="v" id="pEmail">...</div></div>
-        <div class="kv"><div class="k">ID</div><div class="v" id="pId">...</div></div>
 
-        <div class="editrow">
-          <input id="nickInput" placeholder="Новый никнейм" />
-          <button class="btn-ghost" id="saveNick" style="white-space:nowrap;">Изменить</button>
+      <div class="profile">
+        <div class="row">
+          <div class="label">Почта</div>
+          <div id="pEmail" class="value">—</div>
         </div>
-
-        <div class="small">Тема приложения:</div>
-        <div class="theme-row" id="themeRow"></div>
-
-        <div class="notice" id="pNotice"></div>
+        <div class="row">
+          <div class="label">ID</div>
+          <div id="pId" class="value">—</div>
+        </div>
+        <div class="row">
+          <div class="label">Никнейм</div>
+          <input id="pNick" class="input" placeholder="никнейм" />
+        </div>
+        <div class="row actions">
+          <button id="pSave" class="btn wide">Изменить</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <script type="module">
-    import {
-      logoSVG, api, loadSession, clearSession,
-      loadContacts, addContact,
-      displayName, avatarHTML, sanitizeRichHtml,
-      THEMES, initTheme, getTheme, setTheme
-    } from "/brand.js";
-
-    initTheme();
-
-    // ---------- Session ----------
-    const me = loadSession();
-    if(!me?.userId) location.href = "/login.html";
-
-    // Brand
-    document.getElementById("brand").innerHTML = `${logoSVG(44)}<div class="brand-title">FroteBiteMessenger</div>`;
-
-    // Status helpers
-    const leftStatus = document.getElementById("leftStatus");
-    const rightStatus = document.getElementById("rightStatus");
-    const setLeftStatus = (t)=>{ leftStatus.textContent=t; setTimeout(()=>leftStatus.textContent="Готово", 800); };
-    const setRightStatus = (t)=>{ rightStatus.textContent=t; setTimeout(()=>rightStatus.textContent="Готово", 800); };
-
-    // ---------- Toast ----------
-    const toastHost = document.getElementById("toastHost");
-    function showToast(title, text, ttlMs = 3500){
-      const el = document.createElement("div");
-      el.className = "toast";
-      el.innerHTML = `
-        <div class="t1">${title}</div>
-        <div class="t2">${text}</div>
-        <div class="bar"></div>
-      `;
-      toastHost.appendChild(el);
-      const bar = el.querySelector(".bar");
-      bar.animate([{ transform:"scaleX(1)" }, { transform:"scaleX(0)" }], {
-        duration: ttlMs, easing: "linear", fill: "forwards"
-      });
-      setTimeout(()=> {
-        el.classList.add("fade");
-        setTimeout(()=> el.remove(), 1500);
-      }, ttlMs);
-    }
-
-    // ---------- Profile ----------
-    const nickPill = document.getElementById("nickPill");
-
-    async function refreshProfile(){
-      try{
-        const data = await api(`/api/profile?userId=${me.userId}`);
-        me.email = data.user.email;
-        me.nickname = data.user.nickname || null;
-        localStorage.setItem("fbm_user", JSON.stringify(me));
-        nickPill.textContent = displayName({ id: me.userId, nickname: me.nickname });
-      }catch{
-        localStorage.clear();
-        location.href = "/login.html";
-      }
-    }
-    await refreshProfile();
-
-    // Modal
-    const modalBg = document.getElementById("modalBg");
-    const pNick = document.getElementById("pNick");
-    const pEmail = document.getElementById("pEmail");
-    const pId = document.getElementById("pId");
-    const pNotice = document.getElementById("pNotice");
-    const themeRow = document.getElementById("themeRow");
-
-    function renderThemeButtons(){
-      themeRow.innerHTML = "";
-      const current = getTheme();
-      for(const t of THEMES){
-        const btn = document.createElement("button");
-        btn.className = "theme-btn" + (t.id === current ? " active" : "");
-        btn.textContent = t.name;
-        btn.addEventListener("click", ()=>{
-          setTheme(t.id);
-          renderThemeButtons();
-        });
-        themeRow.appendChild(btn);
-      }
-    }
-
-    function openModal(){
-      pNotice.classList.remove("show");
-      pNick.textContent = me.nickname ? me.nickname : "(не задан)";
-      pEmail.textContent = me.email;
-      pId.textContent = String(me.userId);
-      document.getElementById("nickInput").value = me.nickname || "";
-      renderThemeButtons();
-      modalBg.classList.add("show");
-    }
-    function closeModal(){ modalBg.classList.remove("show"); }
-
-    document.getElementById("openProfile").addEventListener("click", openModal);
-    document.getElementById("modalClose").addEventListener("click", closeModal);
-    modalBg.addEventListener("click", (e)=>{ if(e.target === modalBg) closeModal(); });
-
-    document.getElementById("saveNick").addEventListener("click", async () => {
-      const nn = document.getElementById("nickInput").value.trim();
-      pNotice.classList.remove("show");
-      try{
-        const data = await api("/api/profile/nickname", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ userId: me.userId, nickname: nn })
-        });
-        me.nickname = data.nickname;
-        localStorage.setItem("fbm_user", JSON.stringify(me));
-        await refreshProfile();
-        openModal();
-        pNotice.textContent = "Никнейм обновлён ✅";
-        pNotice.classList.add("show");
-      }catch(e){
-        pNotice.textContent = "Ошибка: " + e.message;
-        pNotice.classList.add("show");
-      }
-    });
-
-    // Logout
-    document.getElementById("logout").addEventListener("click", () => {
-      clearSession();
-      location.href = "/login.html";
-    });
-
-    // ---------- Tabs + blur ----------
-    const tabChats = document.getElementById("tabChats");
-    const tabCalls = document.getElementById("tabCalls");
-    const leftView = document.getElementById("leftView");
-    const rightView = document.getElementById("rightView");
-    const contactsEl = document.getElementById("contacts");
-    const callsListEl = document.getElementById("callsList");
-    const chatView = document.getElementById("chatView");
-    const callsView = document.getElementById("callsView");
-    const callControls = document.getElementById("callControls");
-    let activeTab = "chats";
-
-    function blurSwitch(toTab){
-      leftView.classList.add("blurring");
-      rightView.classList.add("blurring");
-      setTimeout(()=> {
-        activeTab = toTab;
-        tabChats.classList.toggle("active", toTab === "chats");
-        tabCalls.classList.toggle("active", toTab === "calls");
-
-        contactsEl.style.display = (toTab === "chats") ? "block" : "none";
-        callsListEl.style.display = (toTab === "calls") ? "block" : "none";
-
-        chatView.style.display = (toTab === "chats") ? "block" : "none";
-        callsView.style.display = (toTab === "calls") ? "block" : "none";
-
-        setTimeout(()=> {
-          leftView.classList.remove("blurring");
-          rightView.classList.remove("blurring");
-        }, 10);
-      }, 170);
-    }
-    tabChats.addEventListener("click", ()=> blurSwitch("chats"));
-    tabCalls.addEventListener("click", ()=> blurSwitch("calls"));
-
-    // ---------- Users cache for search + contacts ----------
-    let allUsers = [];
-    let userById = new Map();
-    async function loadUsers(){
-      const data = await api("/api/users");
-      allUsers = data.users || [];
-      userById = new Map(allUsers.map(u => [u.id, u]));
-    }
-    await loadUsers();
-
-    // ---------- Dialogs (server gives unread + last message) ----------
-    let dialogs = []; // from /api/dialogs
-    let manualContacts = loadContacts(); // ids added by search
-    let contacts = []; // merged ids
-    let dialogByOtherId = new Map(); // otherId -> dialog row
-
-    async function refreshDialogs(){
-      const data = await api(`/api/dialogs?me=${me.userId}`);
-      dialogs = data.dialogs || [];
-      dialogByOtherId = new Map(dialogs.map(d => [Number(d.other_id), d]));
-    }
-
-    function mergeContacts(){
-      const set = new Set();
-      for(const d of dialogs) set.add(Number(d.other_id));
-      for(const id of manualContacts) set.add(Number(id));
-      set.delete(me.userId);
-
-      contacts = Array.from(set).filter(id => userById.has(id)).sort((a,b)=>{
-        // sort by dialog last message if exists, else by id
-        const da = dialogByOtherId.get(a)?.last_id || 0;
-        const db = dialogByOtherId.get(b)?.last_id || 0;
-        if(db !== da) return db - da;
-        return a - b;
-      });
-    }
-
-    // ---------- Search/Add contact ----------
-    const findEmail = document.getElementById("findEmail");
-    const findId = document.getElementById("findId");
-    const findMsg = document.getElementById("findMsg");
-    let findTimer = null;
-
-    function setFindMessage(t){ findMsg.textContent=t; findMsg.classList.add("show"); }
-    function clearFindMessage(){ findMsg.classList.remove("show"); findMsg.textContent=""; }
-
-    function findUser(email, idStr){
-      const emailNorm = String(email||"").trim().toLowerCase();
-      const idNorm = String(idStr||"").trim();
-      if(!emailNorm && !idNorm) return null;
-
-      if(idNorm){
-        const id = Number(idNorm);
-        if(Number.isFinite(id)){
-          const u = userById.get(id);
-          if(u) return u;
-        }
-      }
-      if(emailNorm){
-        const u = allUsers.find(x => String(x.email).toLowerCase() === emailNorm);
-        if(u) return u;
-      }
-      return null;
-    }
-
-    function triggerFind(){
-      clearTimeout(findTimer);
-      findTimer = setTimeout(async () => {
-        if(!findEmail.value.trim() && !findId.value.trim()){
-          clearFindMessage();
-          return;
-        }
-        const u = findUser(findEmail.value, findId.value);
-        if(!u){
-          setFindMessage("Почта или айди введены неверно, никого не найдено");
-          return;
-        }
-        if(u.id === me.userId){
-          setFindMessage("Это ваш аккаунт 🙂");
-          return;
-        }
-        clearFindMessage();
-
-        manualContacts = addContact(u.id);
-        mergeContacts();
-        renderContacts();
-        setActiveUser(u.id, true);
-      }, 260);
-    }
-    findEmail.addEventListener("input", triggerFind);
-    findId.addEventListener("input", triggerFind);
-
-    // ---------- Contacts render ----------
-    let activeUserId = null;
-    function stripHtml(html){
-      const d = document.createElement("div");
-      d.innerHTML = String(html || "");
-      return d.textContent || "";
-    }
-
-    function renderContacts(){
-      contactsEl.innerHTML = "";
-
-      if(contacts.length === 0){
-        contactsEl.innerHTML = `<div class="sub" style="padding:10px;">Нет переписок. Добавь человека сверху (почта или id).</div>`;
-        document.getElementById("rightTitle").textContent = "Выбери контакт";
-        activeUserId = null;
-        return;
-      }
-
-      for(const id of contacts){
-        const u = userById.get(id);
-        const d = dialogByOtherId.get(id);
-
-        const unread = Number(d?.unread_count || 0);
-        const lastText = d?.last_text ? stripHtml(d.last_text).slice(0, 80) : "Нет сообщений";
-        const badge = unread > 0 ? `<div class="unread show">${unread > 99 ? "99+" : unread}</div>` : `<div class="unread"></div>`;
-
-        const item = document.createElement("div");
-        item.className = "user-item" + (activeUserId === id ? " active" : "");
-        item.innerHTML = `
-          <div class="user-row">
-            <div class="user-left">
-              ${avatarHTML({ id: u.id, nickname: u.nickname }, 34)}
-              <div class="user-text">
-                <div class="user-title">${displayName({ id: u.id, nickname: u.nickname })}</div>
-                <div class="user-sub">${lastText}</div>
-              </div>
-            </div>
-            ${badge}
-          </div>
-        `;
-        item.addEventListener("click", ()=> setActiveUser(id, true));
-        contactsEl.appendChild(item);
-      }
-    }
-
-    // ---------- Thread ----------
-    const threadEl = document.getElementById("thread");
-    const editor = document.getElementById("editor");
-
-    let replyTarget = null;
-    const replyBar = document.getElementById("replyBar");
-    const replyTitle = document.getElementById("replyTitle");
-    const replyText = document.getElementById("replyText");
-    function setReply(target){
-      replyTarget = target;
-      if(!target){
-        replyBar.classList.remove("show");
-        return;
-      }
-      const u = userById.get(target.fromId) || { id: target.fromId, nickname: null };
-      replyTitle.textContent = `Ответ ${displayName(u)}`;
-      replyText.textContent = target.preview;
-      replyBar.classList.add("show");
-      editor.focus();
-    }
-    document.getElementById("replyClear").addEventListener("click", ()=> setReply(null));
-
-    function renderMessages(messages){
-      threadEl.innerHTML = "";
-      let maxId = 0;
-
-      for(const m of messages){
-        maxId = Math.max(maxId, m.id);
-
-        const wrap = document.createElement("div");
-        wrap.className = "msg-wrap";
-        wrap.dataset.mid = String(m.id);
-
-        const bubble = document.createElement("div");
-        bubble.className = "bubble" + (m.sender_id === me.userId ? " me" : "");
-        bubble.dataset.mid = String(m.id);
-
-        if(m.reply_to_message_id && m.reply_text){
-          const rp = document.createElement("div");
-          rp.className = "reply-preview";
-          rp.innerHTML = `
-            <div class="rt">Ответ ${displayName(userById.get(m.reply_sender_id) || {id:m.reply_sender_id})}</div>
-            <div class="rx">${stripHtml(m.reply_text).slice(0, 120)}</div>
-          `;
-          bubble.appendChild(rp);
-        }
-
-        const body = document.createElement("div");
-        body.innerHTML = sanitizeRichHtml(m.text);
-        bubble.appendChild(body);
-
-        const meta = document.createElement("div");
-        meta.className = "meta" + (m.sender_id === me.userId ? " me" : "");
-        meta.textContent = new Date(m.created_at).toLocaleString();
-
-        bubble.addEventListener("contextmenu", (e)=>{
-          e.preventDefault();
-          openCtx(e.clientX, e.clientY, {
-            id: m.id,
-            senderId: m.sender_id,
-            preview: stripHtml(m.text).slice(0, 140)
-          });
-        });
-
-        wrap.appendChild(bubble);
-        wrap.appendChild(meta);
-        threadEl.appendChild(wrap);
-      }
-
-      threadEl.scrollTop = threadEl.scrollHeight;
-
-      return maxId;
-    }
-
-    async function refreshThreadAndRead(){
-      if(!activeUserId) return;
-
-      const data = await api(`/api/messages/thread?me=${me.userId}&with=${activeUserId}`);
-      const msgs = data.messages || [];
-      const maxId = renderMessages(msgs);
-
-      if(maxId > 0){
-        await api("/api/read", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ userId: me.userId, otherId: activeUserId, lastReadMessageId: maxId })
-        });
-      }
-    }
-
-    async function setActiveUser(id, refreshNow){
-      activeUserId = Number(id);
-
-      const u = userById.get(activeUserId);
-      document.getElementById("rightTitle").textContent = `Диалог: ${displayName({ id: u.id, nickname: u.nickname })}`;
-
-      setReply(null);
-
-      if(refreshNow){
-        await refreshThreadAndRead();
-        await refreshDialogs();
-        mergeContacts();
-        renderContacts();
-      }
-
-      renderCallControls();
-    }
-
-    // Refresh button
-    document.getElementById("refresh").addEventListener("click", async ()=> {
-      await refreshThreadAndRead();
-      await refreshDialogs();
-      mergeContacts();
-      renderContacts();
-    });
-
-    // ---------- Send ----------
-    document.getElementById("send").addEventListener("click", async () => {
-      if(!activeUserId) return setRightStatus("Выбери контакт");
-
-      const clean = sanitizeRichHtml(editor.innerHTML);
-      const plain = stripHtml(clean).trim();
-      if(!plain) return setRightStatus("Пустое сообщение");
-
-      try{
-        setRightStatus("Отправка...");
-        await api("/api/messages/send", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({
-            senderId: me.userId,
-            receiverId: activeUserId,
-            text: clean,
-            replyToMessageId: replyTarget?.id || null
-          })
-        });
-        editor.innerHTML = "";
-        setReply(null);
-
-        // WS also updates, но на всякий — сразу перечитаем текущий поток
-        await refreshThreadAndRead();
-        setRightStatus("Ок");
-      }catch(e){
-        setRightStatus("Ошибка: " + e.message);
-      }
-    });
-
-    editor.addEventListener("keydown", (e)=>{
-      if(e.key === "Enter" && !e.shiftKey){
-        e.preventDefault();
-        document.getElementById("send").click();
-      }
-    });
-
-    // ---------- Format toolbar ----------
-    const formatbar = document.getElementById("formatbar");
-    function selectionInsideEditor(){
-      const sel = window.getSelection();
-      if(!sel || sel.rangeCount === 0) return false;
-      const range = sel.getRangeAt(0);
-      return editor.contains(range.commonAncestorContainer);
-    }
-    function updateFormatbar(){
-      const sel = window.getSelection();
-      if(!sel || sel.rangeCount === 0 || sel.isCollapsed || !selectionInsideEditor()){
-        formatbar.classList.remove("show");
-        return;
-      }
-      const rect = sel.getRangeAt(0).getBoundingClientRect();
-      const x = Math.max(10, Math.min(window.innerWidth - 220, rect.left + rect.width/2 - 110));
-      const y = Math.max(10, rect.top - 52);
-      formatbar.style.left = x + "px";
-      formatbar.style.top = y + "px";
-      formatbar.classList.add("show");
-    }
-    document.addEventListener("selectionchange", ()=> {
-      if(activeTab !== "chats") return;
-      updateFormatbar();
-    });
-    function cmd(command){
-      if(!selectionInsideEditor()) return;
-      document.execCommand(command, false, null);
-      updateFormatbar();
-      editor.focus();
-    }
-    document.getElementById("fbBold").addEventListener("click", ()=> cmd("bold"));
-    document.getElementById("fbItalic").addEventListener("click", ()=> cmd("italic"));
-    document.getElementById("fbUnderline").addEventListener("click", ()=> cmd("underline"));
-    document.addEventListener("click", (e)=>{
-      if(!formatbar.contains(e.target) && e.target !== editor) formatbar.classList.remove("show");
-    });
-
-    // ---------- Context menu Reply/Delete ----------
-    const ctx = document.getElementById("ctx");
-    const ctxReply = document.getElementById("ctxReply");
-    const ctxDelete = document.getElementById("ctxDelete");
-    let ctxMessage = null;
-
-    function openCtx(x,y,msg){
-      ctxMessage = msg;
-      ctx.classList.add("show");
-      const w = ctx.offsetWidth, h = ctx.offsetHeight;
-      ctx.style.left = Math.min(x, window.innerWidth - w - 8) + "px";
-      ctx.style.top  = Math.min(y, window.innerHeight - h - 8) + "px";
-    }
-    function closeCtx(){ ctx.classList.remove("show"); ctxMessage = null; }
-    document.addEventListener("click", (e)=>{ if(!ctx.contains(e.target)) closeCtx(); });
-
-    ctxReply.addEventListener("click", ()=>{
-      if(!ctxMessage) return;
-      setReply({ id: ctxMessage.id, fromId: ctxMessage.senderId, preview: ctxMessage.preview });
-      closeCtx();
-    });
-
-    function animateDeleteById(mid){
-      const el = threadEl.querySelector(`[data-mid="${mid}"]`);
-      if(!el) return;
-      const h = el.offsetHeight;
-      el.style.height = h + "px";
-      requestAnimationFrame(()=>{
-        el.classList.add("deleting");
-        setTimeout(()=>{
-          el.classList.add("collapse");
-          el.style.height = "0px";
-          setTimeout(()=> el.remove(), 260);
-        }, 190);
-      });
-    }
-
-    ctxDelete.addEventListener("click", async ()=>{
-      if(!ctxMessage) return;
-      const mid = ctxMessage.id;
-      closeCtx();
-      try{
-        setRightStatus("Удаление...");
-        await api(`/api/messages/${mid}?requesterId=${me.userId}`, { method:"DELETE" });
-        animateDeleteById(mid);
-        setRightStatus("Удалено");
-      }catch(e){
-        setRightStatus("Ошибка: " + e.message);
-      }
-    });
-
-    // ---------- Calls (unchanged local) ----------
-    const CALLS_KEY = "fbm_calls";
-    function loadCalls(){ try { return JSON.parse(localStorage.getItem(CALLS_KEY)||"[]"); } catch { return []; } }
-    function saveCalls(list){ localStorage.setItem(CALLS_KEY, JSON.stringify(list)); }
-
-    function renderCallsList(){
-      const calls = loadCalls();
-      callsListEl.innerHTML = "";
-      if(calls.length === 0){
-        callsListEl.innerHTML = `<div class="sub">Пока нет звонков.</div>`;
-        return;
-      }
-      const sorted = [...calls].sort((a,b)=> b.ts - a.ts);
-      for(const c of sorted){
-        const u = userById.get(c.withId) || { id: c.withId, nickname: null };
-        const el = document.createElement("div");
-        el.className = "user-item";
-        el.style.cursor = "default";
-        el.innerHTML = `
-          <div class="user-row">
-            <div class="user-left">
-              ${avatarHTML({ id: u.id, nickname: u.nickname }, 34)}
-              <div class="user-text">
-                <div class="user-title">${c.type === "out" ? "Исходящий" : "Входящий"} • ${displayName(u)}</div>
-                <div class="user-sub">${new Date(c.ts).toLocaleString()}</div>
-              </div>
-            </div>
-          </div>
-        `;
-        callsListEl.appendChild(el);
-      }
-    }
-
-    function renderCallControls(){
-      callControls.innerHTML = "";
-      if(!activeUserId){
-        callControls.innerHTML = `<div class="sub">Выбери контакт слева, чтобы появилась кнопка “Позвонить”.</div>`;
-        return;
-      }
-      const u = userById.get(activeUserId);
-      const btn = document.createElement("button");
-      btn.className = "btn";
-      btn.textContent = "Позвонить";
-      btn.addEventListener("click", ()=>{
-        const calls = loadCalls();
-        calls.push({ type:"out", withId: activeUserId, ts: Date.now() });
-        saveCalls(calls);
-        showToast("Звонок", `Исходящий вызов: ${displayName(u)}`, 2500);
-        renderCallsList();
-        blurSwitch("calls");
-      });
-      callControls.appendChild(btn);
-    }
-
-    // ---------- WebSocket real-time ----------
-    let ws = null;
-    let wsReady = false;
-
-    function wsUrl(){
-      const proto = location.protocol === "https:" ? "wss" : "ws";
-      return `${proto}://${location.host}/ws?userId=${me.userId}`;
-    }
-
-    function connectWS(){
-      wsReady = false;
-      ws = new WebSocket(wsUrl());
-
-      ws.onopen = () => { wsReady = true; };
-      ws.onclose = () => { wsReady = false; setTimeout(connectWS, 1200); };
-
-      ws.onmessage = async (evt) => {
-        let msg = null;
-        try { msg = JSON.parse(evt.data); } catch { return; }
-
-        if(msg.type === "profile:update"){
-          // refresh users cache for nice names
-          await loadUsers();
-          await refreshDialogs();
-          mergeContacts();
-          renderContacts();
-          if(activeUserId){
-            const u = userById.get(activeUserId);
-            if(u) document.getElementById("rightTitle").textContent = `Диалог: ${displayName(u)}`;
-          }
-          await refreshProfile();
-          return;
-        }
-
-        if(msg.type === "message:new"){
-          const m = msg.message;
-          const otherId = (m.sender_id === me.userId) ? m.receiver_id : m.sender_id;
-
-          // update dialogs + UI
-          await refreshDialogs();
-          mergeContacts();
-          renderContacts();
-
-          // if current dialog open -> refresh thread + mark read
-          if(activeUserId && otherId === activeUserId){
-            await refreshThreadAndRead();
-          } else {
-            // toast only for incoming
-            if(m.sender_id !== me.userId){
-              const u = userById.get(otherId) || { id: otherId, nickname: null };
-              showToast("Новое сообщение", `${displayName(u)}: ${stripHtml(m.text).slice(0, 120)}`);
-            }
-          }
-          return;
-        }
-
-        if(msg.type === "message:delete"){
-          const mid = Number(msg.messageId);
-          // remove from UI if visible
-          const el = threadEl.querySelector(`[data-mid="${mid}"]`);
-          if(el) animateDeleteById(mid);
-          await refreshDialogs();
-          mergeContacts();
-          renderContacts();
-          return;
-        }
-
-        if(msg.type === "read:update"){
-          // another tab of mine updated reads -> refresh contacts badge
-          await refreshDialogs();
-          mergeContacts();
-          renderContacts();
-          return;
-        }
-      };
-    }
-
-    connectWS();
-
-    // ---------- Init ----------
-    await refreshDialogs();
-    mergeContacts();
-    renderContacts();
-    renderCallsList();
-    renderCallControls();
-
-    // auto open first
-    if(contacts.length > 0){
-      await setActiveUser(contacts[0], true);
-    }
-
-    // small fallback polling (in case ws blocked)
-    setInterval(async ()=>{
-      if(wsReady) return;
-      await refreshDialogs();
-      mergeContacts();
-      renderContacts();
-      if(activeUserId && activeTab === "chats"){
-        await refreshThreadAndRead();
-      }
-    }, 2500);
-  </script>
+  <!-- Toast -->
+  <div id="toast" class="toast" hidden>
+    <div class="toast-card glass">
+      <div id="toastText" class="toast-text">Новое сообщение</div>
+      <div class="toast-bar"><div id="toastBarFill" class="toast-bar-fill"></div></div>
+    </div>
+  </div>
+
+  <script src="./brand.js"></script>
 </body>
 </html>
