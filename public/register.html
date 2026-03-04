@@ -2,74 +2,76 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FroteBiteMessenger — Регистрация</title>
-  <link rel="stylesheet" href="/brand.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Регистрация — FroteBiteMessenger</title>
+  <link rel="stylesheet" href="./brand.css" />
 </head>
-<body>
-  <div class="auth-wrap">
-    <div class="auth-logo" id="authLogo"></div>
+<body class="theme-ember">
+  <div class="bg"></div>
 
-    <main class="shell">
-      <h1>Регистрация</h1>
-      <p class="sub">Создай аккаунт, чтобы начать переписку.</p>
-
-      <label>Почта</label>
-      <input id="email" type="email" placeholder="name@example.com" autocomplete="email">
-
-      <label>Пароль</label>
-      <input id="password" type="password" placeholder="минимум 8 символов" autocomplete="new-password">
-
-      <button class="btn" id="btn">Зарегистрироваться</button>
-
-      <div class="notice" id="notice"></div>
-
-      <div class="linkline" id="toLogin">
-        Уже есть аккаунт? <a href="/login.html">Войти</a>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo"><span class="logo-f">F</span><span class="logo-flame"></span></div>
+      <div class="brand-text">
+        <div class="brand-name">FroteBiteMessenger</div>
+        <div class="brand-sub">Create account</div>
       </div>
-    </main>
-  </div>
+    </div>
+  </header>
 
-  <script type="module">
-    import { logoSVG } from "/brand.js";
+  <main class="auth">
+    <section class="auth-card glass">
+      <div class="auth-title">Регистрация</div>
+      <div class="auth-sub">Почта + пароль (минимум 8 символов).</div>
 
-    document.getElementById("authLogo").innerHTML = `
-      ${logoSVG(56)}
-      <div class="title">FroteBiteMessenger</div>
-    `;
+      <div class="auth-row">
+        <input id="email" class="input" placeholder="Почта" autocomplete="email">
+        <input id="pass" class="input" placeholder="Пароль" type="password" autocomplete="new-password">
+        <button id="go" class="btn">Создать</button>
+      </div>
 
-    const notice = document.getElementById("notice");
-    const toLogin = document.getElementById("toLogin");
+      <div id="err" class="err" hidden></div>
 
-    function showNotice(t){ notice.textContent = t; notice.classList.add("show"); }
-    function showLoginLine(){ toLogin.classList.add("show"); }
+      <div class="auth-links">
+        Уже есть аккаунт? <a href="./login.html">Войти</a>
+      </div>
+    </section>
+  </main>
 
-    document.getElementById("btn").addEventListener("click", async () => {
-      const email = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value;
-      notice.classList.remove("show");
+  <script>
+    const $ = (s)=>document.querySelector(s);
+    const err = $("#err");
+
+    $("#go").addEventListener("click", async () => {
+      err.hidden = true;
+      const email = $("#email").value.trim();
+      const password = $("#pass").value;
 
       try{
-        const res = await fetch("/api/register", {
+        const r = await fetch("/api/register", {
           method:"POST",
           headers:{ "Content-Type":"application/json" },
           body: JSON.stringify({ email, password })
         });
-        const data = await res.json().catch(()=> ({}));
+        const j = await r.json();
+        if(!r.ok) throw new Error(j.error || "Ошибка");
 
-        if(res.ok){
-          showNotice("Аккаунт создан ✅ Теперь войди.");
-          showLoginLine();
-          return;
-        }
-        if(res.status === 409){
-          showNotice("Такой аккаунт уже существует.");
-          showLoginLine();
-          return;
-        }
-        showNotice(data.error || "Ошибка регистрации");
+        // авто-логин после регистрации
+        const r2 = await fetch("/api/login", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ email, password })
+        });
+        const j2 = await r2.json();
+        if(!r2.ok) throw new Error(j2.error || "Ошибка входа");
+
+        localStorage.setItem("fb_userId", String(j2.userId));
+        localStorage.setItem("fb_email", j2.email);
+        localStorage.setItem("fb_nickname", j2.nickname || "");
+        location.href = "./chat.html";
       }catch(e){
-        showNotice("Ошибка сети: " + e.message);
+        err.textContent = e.message;
+        err.hidden = false;
       }
     });
   </script>

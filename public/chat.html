@@ -2,506 +2,153 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FroteBiteMessenger — Чат</title>
-  <link rel="stylesheet" href="/brand.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Чаты — FroteBiteMessenger</title>
+  <link rel="stylesheet" href="./brand.css" />
 </head>
-<body>
+
+<body class="theme-ember">
+  <div class="bg"></div>
+
   <header class="topbar">
-    <div class="brand" id="brand"></div>
-    <div class="pill" id="mePill">...</div>
+    <div class="brand">
+      <div class="logo"><span class="logo-f">F</span><span class="logo-flame"></span></div>
+      <div class="brand-text">
+        <div class="brand-name">FroteBiteMessenger</div>
+        <div class="brand-sub">Chats</div>
+      </div>
+    </div>
+
+    <div class="top-actions" style="display:flex; gap:10px;">
+      <button id="btnProfile" class="btn pill">Ваш профиль</button>
+      <button id="btnLogout" class="btn pill ghost">Выйти</button>
+    </div>
   </header>
 
-  <main class="chat-wrap">
-    <section class="panel">
-      <div class="panel-head">
-        <b>Пользователи</b>
-        <button class="btn-ghost" id="logout" style="width:auto">Выйти</button>
-      </div>
-
-      <div class="user-search">
-        <div class="hint">
-          <div class="plus">+</div>
-          <div>Введите почту или id</div>
+  <main class="shell">
+    <section class="card glass">
+      <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:6px 6px 14px;">
+        <div class="section-hint">Тема приложения:</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn small ghost themeBtn" data-theme="ember">Ember</button>
+          <button class="btn small ghost themeBtn" data-theme="sunset">Sunset</button>
+          <button class="btn small ghost themeBtn" data-theme="midnight">Midnight</button>
+          <button class="btn small ghost themeBtn" data-theme="aurora">Aurora</button>
         </div>
-
-        <div class="row">
-          <input id="findEmail" type="email" placeholder="Почта" autocomplete="off">
-          <input id="findId" type="text" inputmode="numeric" placeholder="ID" autocomplete="off">
-        </div>
-
-        <div class="find-msg" id="findMsg"></div>
       </div>
 
-      <div class="users" id="users"></div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head">
-        <b id="chatTitle">Выбери пользователя</b>
-        <span class="pill" id="status">Готово</span>
-      </div>
-
-      <div class="thread" id="thread"></div>
-
-      <div class="composer">
-        <div class="reply-bar" id="replyBar">
-          <div class="reply-left">
-            <div class="reply-title" id="replyTitle">Ответ</div>
-            <div class="reply-text" id="replyText">...</div>
+      <div class="layout">
+        <aside class="left">
+          <div class="left-head">
+            <div>
+              <div class="left-title">Диалоги</div>
+              <div class="section-hint">Показываются только чаты с перепиской</div>
+            </div>
+            <button id="btnAdd" class="btn small">+ Добавить</button>
           </div>
-          <button class="reply-x" id="replyClear">✕</button>
-        </div>
 
-        <textarea id="text" placeholder="Напиши сообщение..."></textarea>
+          <div class="search">
+            <div class="section-hint" style="margin-bottom:8px;">Введите почту или ID</div>
+            <div class="search-row">
+              <input id="searchEmail" class="input" placeholder="почта" autocomplete="off" />
+              <input id="searchId" class="input" placeholder="id" autocomplete="off" />
+            </div>
+            <div id="searchErr" class="search-err" hidden>Почта или айди введены неверно, никого не найдено</div>
+          </div>
 
-        <div class="send-row">
-          <button class="btn-ghost" id="refresh">Обновить</button>
-          <button class="btn" id="send">Отправить</button>
-        </div>
+          <div id="usersList" class="users"></div>
+        </aside>
+
+        <section class="right">
+          <!-- чат скрыт, пока никто не выбран -->
+          <div id="chatWrap" class="chat-wrap" hidden>
+            <div class="chat-head">
+              <div class="chat-title" id="chatTitle">Диалог</div>
+              <div class="chat-head-actions">
+                <button id="btnCalls" class="btn small ghost">Позвонить</button>
+                <button id="btnDone" class="btn small">Готово</button>
+              </div>
+            </div>
+
+            <div id="messages" class="messages"></div>
+
+            <div class="composer">
+              <div id="formatBar" class="formatbar" hidden>
+                <button class="fmt" data-fmt="b"><b>Жирный</b></button>
+                <button class="fmt" data-fmt="i"><i>Курсив</i></button>
+                <button class="fmt" data-fmt="u"><u>Подчеркнуть</u></button>
+              </div>
+
+              <textarea id="msgInput" class="textarea" placeholder="Напиши сообщение..."></textarea>
+
+              <div id="replyBanner" class="replybox" hidden></div>
+
+              <div class="composer-actions">
+                <button id="btnRefresh" class="btn wide ghost">Обновить</button>
+                <button id="btnSend" class="btn wide">Отправить</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="callsWrap" class="calls-wrap" hidden>
+            <div class="chat-head">
+              <div class="chat-title">Звонки</div>
+              <div class="chat-head-actions">
+                <button id="btnBackToChats" class="btn small">Назад</button>
+              </div>
+            </div>
+            <div style="padding:18px; color: var(--muted);">
+              Пока без звука 🙂 Тут будет история звонков и кнопка «позвонить».
+            </div>
+          </div>
+        </section>
       </div>
     </section>
+
+    <nav class="bottomnav glass" aria-label="Навигация">
+      <button class="navbtn active" data-view="chats">Чаты</button>
+      <button class="navbtn" data-view="calls">Звонки</button>
+    </nav>
   </main>
 
-  <!-- context menu -->
-  <div class="ctx" id="ctx">
-    <button id="ctxReply">Ответить</button>
-    <button class="danger" id="ctxDelete">Удалить</button>
+  <!-- Profile modal -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card glass">
+      <div class="modal-head">
+        <div class="modal-title">Ваш профиль</div>
+        <button id="modalClose" class="btn small ghost">✕</button>
+      </div>
+
+      <div class="profile">
+        <div class="row">
+          <div class="label">Почта</div>
+          <div id="pEmail" class="value">—</div>
+        </div>
+        <div class="row">
+          <div class="label">ID</div>
+          <div id="pId" class="value">—</div>
+        </div>
+        <div class="row">
+          <div class="label">Никнейм</div>
+          <input id="pNick" class="input" placeholder="никнейм" />
+        </div>
+        <div class="row actions">
+          <button id="pSave" class="btn wide">Изменить</button>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- toasts -->
-  <div class="toast-host" id="toastHost"></div>
-
-  <script type="module">
-    import { logoSVG, api, loadSession, clearSession, displayNameById } from "/brand.js";
-
-    document.getElementById("brand").innerHTML = `
-      ${logoSVG(42)}
-      <div class="brand-title">FroteBiteMessenger</div>
-    `;
-
-    const me = loadSession();
-    if(!me?.userId) location.href = "/login.html";
-
-    // UI must not show emails:
-    document.getElementById("mePill").textContent = `${displayNameById(me.userId)}`;
-
-    const statusEl = document.getElementById("status");
-    function setStatus(t){
-      statusEl.textContent = t;
-      setTimeout(()=> statusEl.textContent = "Готово", 850);
-    }
-
-    // State
-    let allUsers = [];         // includes emails for search only
-    let activeUser = null;     // {id,email}
-    let replyTarget = null;    // {id,text,fromId}
-
-    // last seen message id per dialog partner
-    const lastSeenByUser = new Map(); // other_id -> last_id
-    let lastThreadMaxId = 0;
-
-    // DOM
-    const usersEl = document.getElementById("users");
-    const threadEl = document.getElementById("thread");
-    const chatTitle = document.getElementById("chatTitle");
-
-    // Search inputs
-    const findEmail = document.getElementById("findEmail");
-    const findId = document.getElementById("findId");
-    const findMsg = document.getElementById("findMsg");
-
-    // reply bar
-    const replyBar = document.getElementById("replyBar");
-    const replyTitle = document.getElementById("replyTitle");
-    const replyText = document.getElementById("replyText");
-
-    function setReply(target){
-      replyTarget = target;
-      if(!target){
-        replyBar.classList.remove("show");
-        return;
-      }
-      replyTitle.textContent = `Ответ ${displayNameById(target.fromId)}`;
-      replyText.textContent = target.text;
-      replyBar.classList.add("show");
-      document.getElementById("text").focus();
-    }
-    document.getElementById("replyClear").addEventListener("click", () => setReply(null));
-
-    // logout
-    document.getElementById("logout").addEventListener("click", () => {
-      clearSession();
-      location.href = "/login.html";
-    });
-
-    // ---- Toast notifications ----
-    const toastHost = document.getElementById("toastHost");
-    function showToast(title, text, ttlMs = 3500){
-      const el = document.createElement("div");
-      el.className = "toast";
-      el.innerHTML = `
-        <div class="t1">${title}</div>
-        <div class="t2">${text}</div>
-        <div class="bar"></div>
-      `;
-      const bar = el.querySelector(".bar");
-      toastHost.appendChild(el);
-
-      // drain bar
-      bar.animate([{ transform:"scaleX(1)" }, { transform:"scaleX(0)" }], {
-        duration: ttlMs,
-        easing: "linear",
-        fill: "forwards"
-      });
-
-      // after ttl: fade out for 1.5s then remove
-      setTimeout(() => {
-        el.classList.add("fade");
-        setTimeout(() => el.remove(), 1500);
-      }, ttlMs);
-    }
-
-    // ---- User list rendering (NO emails) ----
-    function renderUsersList(){
-      const list = allUsers.filter(u => u.id !== me.userId);
-
-      usersEl.innerHTML = "";
-
-      if(list.length === 0){
-        usersEl.innerHTML = `<div class="sub" style="padding:10px;">Пока никого нет. Введи почту или id сверху, чтобы проверить пользователя.</div>`;
-        chatTitle.textContent = "Выбери пользователя";
-        activeUser = null;
-        return;
-      }
-
-      for(const u of list){
-        const item = document.createElement("div");
-        item.className = "user-item" + (activeUser?.id === u.id ? " active" : "");
-        item.innerHTML = `
-          <div class="user-title">${displayNameById(u.id)}</div>
-          <div class="user-meta">id: ${u.id}</div>
-        `;
-
-        item.addEventListener("click", async () => {
-          activeUser = u;
-          Array.from(usersEl.children).forEach(ch => ch.classList.remove("active"));
-          item.classList.add("active");
-          chatTitle.textContent = `Диалог: ${displayNameById(u.id)}`;
-          setReply(null);
-          await refreshThread(true);
-        });
-
-        usersEl.appendChild(item);
-      }
-
-      if(!activeUser){
-        activeUser = list[0];
-        usersEl.children[0].classList.add("active");
-        chatTitle.textContent = `Диалог: ${displayNameById(activeUser.id)}`;
-      }
-    }
-
-    async function loadUsers(){
-      const data = await api("/api/users");
-      allUsers = data.users || [];
-      renderUsersList();
-    }
-
-    // ---- Search (email OR id) ----
-    let findTimer = null;
-
-    function setFindMessage(text){
-      findMsg.textContent = text;
-      findMsg.classList.add("show");
-    }
-    function clearFindMessage(){
-      findMsg.classList.remove("show");
-      findMsg.textContent = "";
-    }
-
-    function matchUser(email, idStr){
-      const emailNorm = String(email || "").trim().toLowerCase();
-      const idNorm = String(idStr || "").trim();
-
-      if(!emailNorm && !idNorm) return null;
-
-      // match by id
-      if(idNorm){
-        const id = Number(idNorm);
-        if(Number.isFinite(id)){
-          const byId = allUsers.find(u => u.id === id);
-          if(byId) return byId;
-        }
-      }
-
-      // match by email (hidden in UI, used only for search)
-      if(emailNorm){
-        const byEmail = allUsers.find(u => String(u.email).toLowerCase() === emailNorm);
-        if(byEmail) return byEmail;
-      }
-
-      return null;
-    }
-
-    function triggerFindCheck(){
-      clearTimeout(findTimer);
-      findTimer = setTimeout(() => {
-        const u = matchUser(findEmail.value, findId.value);
-
-        if(!findEmail.value.trim() && !findId.value.trim()){
-          clearFindMessage();
-          return;
-        }
-
-        if(!u){
-          setFindMessage("Почта или айди введены неверно, никого не найдено");
-          return;
-        }
-
-        clearFindMessage();
-        // highlight/select user if exists and not me
-        if(u.id === me.userId){
-          setFindMessage("Это ваш аккаунт 🙂");
-          return;
-        }
-
-        // set active and rerender to mark active
-        activeUser = u;
-        renderUsersList();
-        refreshThread(true);
-      }, 260);
-    }
-
-    findEmail.addEventListener("input", triggerFindCheck);
-    findId.addEventListener("input", triggerFindCheck);
-
-    // ---- Render thread ----
-    function renderMessages(messages){
-      threadEl.innerHTML = "";
-      lastThreadMaxId = 0;
-
-      for(const m of messages){
-        lastThreadMaxId = Math.max(lastThreadMaxId, m.id);
-
-        const wrap = document.createElement("div");
-        wrap.className = "msg-wrap";
-        wrap.dataset.mid = String(m.id);
-
-        const bubble = document.createElement("div");
-        bubble.className = "bubble" + (m.sender_id === me.userId ? " me" : "");
-        bubble.dataset.mid = String(m.id);
-        bubble.dataset.sender = String(m.sender_id);
-        bubble.dataset.text = m.text;
-
-        if(m.reply_to_message_id && m.reply_text){
-          const rp = document.createElement("div");
-          rp.className = "reply-preview";
-          rp.innerHTML = `
-            <div class="rt">Ответ ${displayNameById(m.reply_sender_id)}</div>
-            <div class="rx">${m.reply_text}</div>
-          `;
-          bubble.appendChild(rp);
-        }
-
-        const textNode = document.createElement("div");
-        textNode.textContent = m.text;
-        bubble.appendChild(textNode);
-
-        const meta = document.createElement("div");
-        meta.className = "meta" + (m.sender_id === me.userId ? " me" : "");
-        meta.textContent = new Date(m.created_at).toLocaleString();
-
-        // context menu
-        bubble.addEventListener("contextmenu", (e) => {
-          e.preventDefault();
-          openCtx(e.clientX, e.clientY, {
-            id: m.id,
-            senderId: m.sender_id,
-            text: m.text
-          });
-        });
-
-        wrap.appendChild(bubble);
-        wrap.appendChild(meta);
-        threadEl.appendChild(wrap);
-      }
-
-      threadEl.scrollTop = threadEl.scrollHeight;
-
-      // update last seen for active dialog
-      if(activeUser){
-        const prev = lastSeenByUser.get(activeUser.id) || 0;
-        if(lastThreadMaxId > prev) lastSeenByUser.set(activeUser.id, lastThreadMaxId);
-      }
-    }
-
-    async function refreshThread(updateSeen = false){
-      if(!activeUser) return;
-      const data = await api(`/api/messages/thread?me=${me.userId}&with=${activeUser.id}`);
-      const msgs = data.messages || [];
-      renderMessages(msgs);
-
-      if(updateSeen && activeUser){
-        const maxId = msgs.reduce((acc, x) => Math.max(acc, x.id), 0);
-        const prev = lastSeenByUser.get(activeUser.id) || 0;
-        if(maxId > prev) lastSeenByUser.set(activeUser.id, maxId);
-      }
-    }
-
-    // ---- Send ----
-    document.getElementById("send").addEventListener("click", async () => {
-      if(!activeUser) return setStatus("Выбери пользователя");
-      const text = document.getElementById("text").value.trim();
-      if(!text) return setStatus("Пустое сообщение");
-
-      try{
-        setStatus("Отправка...");
-        await api("/api/messages/send", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({
-            senderId: me.userId,
-            receiverId: activeUser.id,
-            text,
-            replyToMessageId: replyTarget?.id || null
-          })
-        });
-
-        document.getElementById("text").value = "";
-        setReply(null);
-        await refreshThread(true);
-        setStatus("Ок");
-      }catch(e){
-        setStatus("Ошибка: " + e.message);
-      }
-    });
-
-    document.getElementById("refresh").addEventListener("click", () => refreshThread(true));
-
-    // ---- Context menu Reply/Delete ----
-    const ctx = document.getElementById("ctx");
-    const ctxReply = document.getElementById("ctxReply");
-    const ctxDelete = document.getElementById("ctxDelete");
-
-    let ctxMessage = null;
-
-    function openCtx(x, y, message){
-      ctxMessage = message;
-      ctx.classList.add("show");
-
-      const w = ctx.offsetWidth;
-      const h = ctx.offsetHeight;
-      const px = Math.min(x, window.innerWidth - w - 8);
-      const py = Math.min(y, window.innerHeight - h - 8);
-
-      ctx.style.left = px + "px";
-      ctx.style.top = py + "px";
-    }
-    function closeCtx(){
-      ctx.classList.remove("show");
-      ctxMessage = null;
-    }
-
-    document.addEventListener("click", (e) => {
-      if(!ctx.contains(e.target)) closeCtx();
-    });
-    document.addEventListener("keydown", (e) => {
-      if(e.key === "Escape") closeCtx();
-    });
-    window.addEventListener("scroll", closeCtx, true);
-
-    ctxReply.addEventListener("click", () => {
-      if(!ctxMessage) return;
-      setReply({ id: ctxMessage.id, text: ctxMessage.text, fromId: ctxMessage.senderId });
-      closeCtx();
-    });
-
-    function animateDeleteById(mid){
-      const el = threadEl.querySelector(`[data-mid="${mid}"]`);
-      if(!el) return;
-
-      const h = el.offsetHeight;
-      el.style.height = h + "px";
-
-      requestAnimationFrame(() => {
-        el.classList.add("deleting");
-        setTimeout(() => {
-          el.classList.add("collapse");
-          el.style.height = "0px";
-          setTimeout(() => el.remove(), 260);
-        }, 190);
-      });
-    }
-
-    ctxDelete.addEventListener("click", async () => {
-      if(!ctxMessage) return;
-      const mid = ctxMessage.id;
-      closeCtx();
-
-      try{
-        setStatus("Удаление...");
-        await api(`/api/messages/${mid}?requesterId=${me.userId}`, { method:"DELETE" });
-        animateDeleteById(mid);
-        setStatus("Удалено");
-      }catch(e){
-        setStatus("Ошибка: " + e.message);
-      }
-    });
-
-    // ---- Notifications polling (0.5s) ----
-    async function pollNotifications(){
-      try{
-        const data = await api(`/api/messages/latest?me=${me.userId}`);
-        const latest = data.latest || [];
-
-        for(const row of latest){
-          const otherId = Number(row.other_id);
-          const lastId = Number(row.id);
-
-          // don't notify for currently open dialog
-          if(activeUser && otherId === activeUser.id) {
-            // update seen for active (so it won't toast after switch)
-            const prev = lastSeenByUser.get(otherId) || 0;
-            if(lastId > prev) lastSeenByUser.set(otherId, lastId);
-            continue;
-          }
-
-          const seen = lastSeenByUser.get(otherId) || 0;
-          if(lastId > seen){
-            // mark as seen up to lastId (so we don't spam every 0.5 sec)
-            lastSeenByUser.set(otherId, lastId);
-
-            // show toast only if message is not from me (incoming)
-            if(Number(row.sender_id) !== me.userId){
-              showToast(
-                `Новое сообщение от ${displayNameById(otherId)}`,
-                String(row.text || "").slice(0, 120)
-              );
-            }
-          }
-        }
-      } catch {
-        // silent
-      }
-    }
-
-    // ---- Thread auto refresh (0.5s) ----
-    async function pollThread(){
-      if(!activeUser) return;
-      // keep it fast: refresh and update seen for active dialog
-      await refreshThread(true);
-    }
-
-    // Init
-    (async () => {
-      await loadUsers();
-      await refreshThread(true);
-
-      // start loops
-      setInterval(pollThread, 500);
-      setInterval(pollNotifications, 500);
-    })();
-  </script>
+  <!-- Toast -->
+  <div id="toast" class="toast" hidden>
+    <div class="toast-card glass">
+      <div id="toastText" class="toast-text">Новое сообщение</div>
+      <div class="toast-bar"><div id="toastBarFill" class="toast-bar-fill"></div></div>
+    </div>
+  </div>
+
+  <div id="ctx" class="ctx glass" hidden></div>
+
+  <script src="./brand.js"></script>
 </body>
 </html>

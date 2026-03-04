@@ -1,130 +1,379 @@
-// UI-only update layer (keeps your backend APIs as-is).
-// If some API endpoints differ in your project, tell me what routes you use and I'll align it.
-
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
 
 const state = {
-  view: "chats",          // chats | calls
-  theme: "ember",
-  selectedUser: null,
-  me: { email: "", id: "", nick: "" },
-  toastTimer: null,
+  me: {
+    id: Number(localStorage.getItem("fb_userId") || 0),
+    email: localStorage.getItem("fb_email") || "",
+    nickname: localStorage.getItem("fb_nickname") || "",
+  },
+  selected: null, // { id, email, nickname }
+  view: "chats",
+  ws: null,
+  replyTo: null, // message id
+  lastDialogsSig: "",
 };
 
-// Elements
-const usersList = $("#usersList");
-const usersEmpty = $("#usersEmpty");
-const rightEmpty = $("#rightEmpty");
-const chatWrap = $("#chatWrap");
-const callsWrap = $("#callsWrap");
-const chatTitle = $("#chatTitle");
-const messagesEl = $("#messages");
-const msgInput = $("#msgInput");
-const formatBar = $("#formatBar");
-const toast = $("#toast");
-const toastText = $("#toastText");
-const toastBarFill = $("#toastBarFill");
-const searchEmail = $("#searchEmail");
-const searchId = $("#searchId");
-const searchErr = $("#searchErr");
-
-// Theme switching
-$$(".pill2").forEach(btn => {
-  btn.addEventListener("click", () => {
-    $$(".pill2").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    setTheme(btn.dataset.theme);
-  });
-});
+function requireAuth() {
+  if (!state.me.id || !state.me.email) {
+    location.href = "./login.html";
+    return false;
+  }
+  return true;
+}
 
 function setTheme(theme) {
-  state.theme = theme;
   document.body.className = `theme-${theme}`;
-  // Persist
   localStorage.setItem("fb_theme", theme);
 }
-
 (function initTheme() {
-  const saved = localStorage.getItem("fb_theme");
-  if (saved) {
-    setTheme(saved);
-    const pill = $(`.pill2[data-theme="${saved}"]`);
-    if (pill) {
-      $$(".pill2").forEach(b => b.classList.remove("active"));
-      pill.classList.add("active");
-    }
-  }
+  const t = localStorage.getItem("fb_theme") || "ember";
+  setTheme(t);
+  $$(".themeBtn").forEach(b => b.addEventListener("click", () => setTheme(b.dataset.theme)));
 })();
 
-// Bottom nav (blur switch)
-$$(".navbtn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    $$(".navbtn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    setView(btn.dataset.view);
-  });
-});
+function toastShow(text) {
+  const toast = $("#toast");
+  const toastText = $("#toastText");
+  const toastBarFill = $("#toastBarFill");
 
-function setView(view) {
-  state.view = view;
-  if (view === "calls") {
-    callsWrap.hidden = false;
-    chatWrap.hidden = true;
-    rightEmpty.hidden = true;
-    callsWrap.style.animation = "blurIn .22s ease-out";
-  } else {
-    callsWrap.hidden = true;
-    // show chat only if selected user
-    syncRightPane();
-    chatWrap.style.animation = "blurIn .22s ease-out";
-  }
+  toastText.textContent = text;
+  toast.hidden = false;
+
+  toastBarFill.getAnimations().forEach(a => a.cancel());
+  toast.getAnimations().forEach(a => a.cancel());
+
+  toastBarFill.animate(
+    [{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }],
+    { duration: 1500, easing: "linear", fill: "forwards" }
+  );
+
+  setTimeout(() => {
+    toast.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, easing: "ease-out", fill: "forwards" });
+    setTimeout(() => (toast.hidden = true), 1500);
+  }, 1500);
 }
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+// **bold**, _italic_, __underline__
+function renderMarkup(text) {
+  let t = escapeHtml(text);
+  t = t.replace(/__([^_]+)__/g, "<u>$1</u>");
+  t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  t = t.replace(/_([^_]+)_/g, "<i>$1</i>");
+  return t;
+}
+
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "API error");
+  return j;
+}
+
+/* ---------------- UI core ---------------- */
 
 function syncRightPane() {
-  const hasChat = !!state.selectedUser;
-  if (state.view !== "chats") return;
+  const chatWrap = $("#chatWrap");
+  const callsWrap = $("#callsWrap");
 
-  if (!hasChat) {
-    rightEmpty.hidden = true;   // user asked: "удали окно чата когда никто не выбран"
+  if (state.view === "calls") {
+    callsWrap.hidden = false;
     chatWrap.hidden = true;
-  } else {
-    rightEmpty.hidden = true;
-    chatWrap.hidden = false;
+    callsWrap.style.animation = "blurIn .22s ease-out";
+    return;
+  }
+
+  callsWrap.hidden = true;
+
+  // IMPORTANT: hide chat when no selection (per your request)
+  chatWrap.hidden = !state.selected;
+  if (!chatWrap.hidden) chatWrap.style.animation = "blurIn .22s ease-out";
+}
+
+function setView(v) {
+  state.view = v;
+  $$(".navbtn").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+  syncRightPane();
+}
+
+function renderUserCard(d) {
+  const name = d.nickname || d.email || ("id " + d.user_id);
+  const unread = Number(d.unread_count || 0);
+
+  return `
+    <div class="user-name">${escapeHtml(name)}</div>
+    <div class="user-sub">${escapeHtml(d.email)} Ј id: ${escapeHtml(String(d.user_id))}</div>
+    ${unread > 0 ? `<div class="unread">${unread}</div>` : ``}
+  `;
+}
+
+async function loadDialogs() {
+  const j = await api(`/api/dialogs?me=${state.me.id}`);
+  const list = $("#usersList");
+
+  // signature to avoid heavy rerender if unchanged
+  const sig = JSON.stringify((j.dialogs || []).map(x => [x.other_id, x.last_id, x.unread_count, x.nickname, x.email]));
+  if (sig === state.lastDialogsSig) return;
+  state.lastDialogsSig = sig;
+
+  list.innerHTML = "";
+  (j.dialogs || []).forEach(d => {
+    const el = document.createElement("div");
+    el.className = "user";
+    el.dataset.uid = String(d.other_id);
+    el.innerHTML = renderUserCard(d);
+
+    el.addEventListener("click", () => {
+      $$(".user").forEach(x => x.classList.remove("active"));
+      el.classList.add("active");
+      state.selected = { id: d.other_id, email: d.email, nickname: d.nickname || "" };
+      $("#chatTitle").textContent = `ƒиалог: ${d.nickname || d.email}`;
+      state.view = "chats";
+      setView("chats");
+      loadThread(true);
+    });
+
+    list.appendChild(el);
+  });
+
+  // keep active highlight if selected
+  if (state.selected) {
+    const active = list.querySelector(`[data-uid="${state.selected.id}"]`);
+    if (active) active.classList.add("active");
   }
 }
 
-// Profile modal
-const modal = $("#modal");
-$("#btnProfile").addEventListener("click", () => {
-  $("#pEmail").textContent = state.me.email || "Ч";
-  $("#pId").textContent = state.me.id || "Ч";
-  $("#pNick").value = state.me.nick || "";
-  modal.hidden = false;
-});
-$("#modalClose").addEventListener("click", () => (modal.hidden = true));
-modal.addEventListener("click", (e) => {
-  if (e.target === modal) modal.hidden = true;
+async function loadThread(markRead) {
+  if (!state.selected) return;
+
+  const j = await api(`/api/messages/thread?me=${state.me.id}&with=${state.selected.id}`);
+  renderMessages(j.messages || []);
+
+  if (markRead && (j.messages || []).length) {
+    const lastId = j.messages[j.messages.length - 1].id;
+    await api("/api/read", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ userId: state.me.id, otherId: state.selected.id, lastReadMessageId: lastId })
+    }).catch(()=>{});
+  }
+}
+
+function renderMessages(msgs) {
+  const box = $("#messages");
+  box.innerHTML = "";
+
+  for (const m of msgs) {
+    const mine = Number(m.sender_id) === state.me.id;
+
+    const el = document.createElement("div");
+    el.className = `msg ${mine ? "mine" : ""}`;
+    el.dataset.mid = String(m.id);
+
+    const meta = new Date(m.created_at).toLocaleString();
+    const from = mine ? "¬ы" : (state.selected.nickname || state.selected.email);
+
+    let replyHtml = "";
+    if (m.reply_to_message_id && m.reply_text) {
+      const replyFrom = (Number(m.reply_sender_id) === state.me.id) ? "¬ы" : (state.selected.nickname || state.selected.email);
+      replyHtml = `
+        <div class="replybox">
+          <b>ќтвет на:</b> ${escapeHtml(replyFrom)}<br/>
+          ${renderMarkup(m.reply_text)}
+        </div>
+      `;
+    }
+
+    el.innerHTML = `
+      <div class="msg-meta">
+        <span>${escapeHtml(from)}</span>
+        <span>Х</span>
+        <span>${escapeHtml(meta)}</span>
+        <span>Х</span>
+        <span>#${escapeHtml(String(m.id))}</span>
+      </div>
+      <div class="msg-body">${renderMarkup(m.text)}</div>
+      ${replyHtml}
+    `;
+
+    // context menu
+    el.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      openCtxMenu(e.clientX, e.clientY, m);
+    });
+
+    box.appendChild(el);
+  }
+
+  box.scrollTop = box.scrollHeight;
+}
+
+function openCtxMenu(x, y, msg) {
+  const ctx = $("#ctx");
+  ctx.hidden = false;
+  ctx.style.left = Math.min(x, window.innerWidth - 240) + "px";
+  ctx.style.top = Math.min(y, window.innerHeight - 160) + "px";
+
+  ctx.innerHTML = `
+    <button class="item" data-act="reply">ќтветить</button>
+    <button class="item danger" data-act="del">”далить</button>
+  `;
+
+  const onClick = async (e) => {
+    const act = e.target?.dataset?.act;
+    if (!act) return;
+
+    if (act === "reply") {
+      state.replyTo = msg.id;
+      const banner = $("#replyBanner");
+      banner.hidden = false;
+      banner.innerHTML = `<b>ќтвет на #${escapeHtml(String(msg.id))}:</b><br/>${renderMarkup(msg.text.slice(0, 180))}`;
+      toastShow("–ежим ответа включЄн");
+    }
+
+    if (act === "del") {
+      try{
+        await api(`/api/messages/${msg.id}?requesterId=${state.me.id}`, { method:"DELETE" });
+        // WS event also comes, but refresh immediately feels snappy
+        await loadThread(false);
+      }catch(err){
+        toastShow(err.message);
+      }
+    }
+
+    closeCtxMenu();
+  };
+
+  const closeOnOutside = (ev) => {
+    if (!ctx.contains(ev.target)) closeCtxMenu();
+  };
+
+  ctx.onclick = onClick;
+  setTimeout(() => window.addEventListener("click", closeOnOutside, { once:true }), 0);
+}
+
+function closeCtxMenu() {
+  const ctx = $("#ctx");
+  ctx.hidden = true;
+  ctx.innerHTML = "";
+}
+
+/* ---------------- Search / Add user ---------------- */
+
+$("#btnAdd")?.addEventListener("click", async () => {
+  const email = ($("#searchEmail").value || "").trim().toLowerCase();
+  const idStr = ($("#searchId").value || "").trim();
+  const err = $("#searchErr");
+
+  err.hidden = true;
+
+  if (!email && !idStr) {
+    err.hidden = false;
+    return;
+  }
+
+  try{
+    const j = await api("/api/users");
+    const users = j.users || [];
+
+    let found = null;
+
+    if (idStr) {
+      const id = Number(idStr);
+      found = users.find(u => Number(u.id) === id);
+    }
+
+    if (!found && email) {
+      found = users.find(u => String(u.email).toLowerCase() === email);
+    }
+
+    if (!found) {
+      err.hidden = false;
+      err.animate(
+        [{ transform:"translateX(0)" }, { transform:"translateX(-6px)" }, { transform:"translateX(6px)" }, { transform:"translateX(0)" }],
+        { duration: 220, easing:"ease-out" }
+      );
+      return;
+    }
+
+    // select chat with found user (even if no messages yet Ч right panel will open, thread empty)
+    state.selected = { id: found.id, email: found.email, nickname: found.nickname || "" };
+    $("#chatTitle").textContent = `ƒиалог: ${found.nickname || found.email}`;
+    setView("chats");
+    $("#chatWrap").hidden = false;
+
+    // highlight if exists in dialogs list
+    $$(".user").forEach(x => x.classList.remove("active"));
+    const existing = $("#usersList").querySelector(`[data-uid="${found.id}"]`);
+    if (existing) existing.classList.add("active");
+
+    await loadThread(false);
+
+    $("#searchEmail").value = "";
+    $("#searchId").value = "";
+  }catch(e){
+    toastShow(e.message);
+  }
 });
 
-$("#pSave").addEventListener("click", async () => {
-  const nick = $("#pNick").value.trim();
-  // Frontend-only: store locally (until backend supports it)
-  state.me.nick = nick;
-  localStorage.setItem("fb_nick", nick);
-  modal.hidden = true;
-  toastShow("Ќикнейм обновлЄн");
-});
+/* ---------------- Sending ---------------- */
 
-// Format bar: show when selecting text while typing
-msgInput.addEventListener("mouseup", toggleFormatBar);
-msgInput.addEventListener("keyup", toggleFormatBar);
+$("#btnRefresh")?.addEventListener("click", () => loadThread(false));
+
+$("#btnSend")?.addEventListener("click", sendMessage);
+
+async function sendMessage() {
+  if (!state.selected) return;
+
+  const ta = $("#msgInput");
+  const text = (ta.value || "").trim();
+  if (!text) return;
+
+  const payload = {
+    senderId: state.me.id,
+    receiverId: state.selected.id,
+    text,
+    replyToMessageId: state.replyTo || null
+  };
+
+  try{
+    await api("/api/messages/send", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    ta.value = "";
+    state.replyTo = null;
+    $("#replyBanner").hidden = true;
+    $("#formatBar").hidden = true;
+
+    await loadThread(true);
+    await loadDialogs();
+  }catch(e){
+    toastShow(e.message);
+  }
+}
+
+/* ---------------- Format bar (selection in textarea) ---------------- */
+
+$("#msgInput")?.addEventListener("mouseup", toggleFormatBar);
+$("#msgInput")?.addEventListener("keyup", toggleFormatBar);
 
 function toggleFormatBar() {
-  const start = msgInput.selectionStart;
-  const end = msgInput.selectionEnd;
-  const hasSelection = typeof start === "number" && typeof end === "number" && end > start;
-  formatBar.hidden = !hasSelection;
+  const ta = $("#msgInput");
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const hasSel = typeof start === "number" && typeof end === "number" && end > start;
+  $("#formatBar").hidden = !hasSel;
 }
 
 $$(".fmt").forEach(btn => {
@@ -135,230 +384,137 @@ $$(".fmt").forEach(btn => {
 });
 
 function applyFormat(fmt) {
-  const start = msgInput.selectionStart;
-  const end = msgInput.selectionEnd;
+  const ta = $("#msgInput");
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
   if (!(end > start)) return;
 
-  const before = msgInput.value.slice(0, start);
-  const sel = msgInput.value.slice(start, end);
-  const after = msgInput.value.slice(end);
+  const before = ta.value.slice(0, start);
+  const sel = ta.value.slice(start, end);
+  const after = ta.value.slice(end);
 
-  // Simple markup: **bold**, _italic_, __underline__
   let wrapped = sel;
   if (fmt === "b") wrapped = `**${sel}**`;
   if (fmt === "i") wrapped = `_${sel}_`;
   if (fmt === "u") wrapped = `__${sel}__`;
 
-  msgInput.value = before + wrapped + after;
-  // restore cursor selection around wrapped text
-  msgInput.focus();
-  msgInput.selectionStart = start;
-  msgInput.selectionEnd = start + wrapped.length;
+  ta.value = before + wrapped + after;
+  ta.focus();
+  ta.selectionStart = start;
+  ta.selectionEnd = start + wrapped.length;
   toggleFormatBar();
 }
 
-// Search/add user logic (UI). Backend check: youТll connect to your API.
-$("#btnAdd").addEventListener("click", async () => {
-  const email = searchEmail.value.trim();
-  const id = searchId.value.trim();
+/* ---------------- Profile ---------------- */
 
-  if (!email && !id) {
-    searchErr.hidden = false;
-    return;
+const modal = $("#modal");
+$("#btnProfile")?.addEventListener("click", async () => {
+  try{
+    const j = await api(`/api/profile?userId=${state.me.id}`);
+    $("#pEmail").textContent = j.user.email;
+    $("#pId").textContent = String(j.user.id);
+    $("#pNick").value = j.user.nickname || "";
+    modal.hidden = false;
+  }catch(e){
+    toastShow(e.message);
   }
+});
+$("#modalClose")?.addEventListener("click", () => (modal.hidden = true));
+modal?.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
 
-  // TODO: replace this stub with your real API call:
-  // Example:
-  // const res = await fetch(`/api/findUser?email=${encodeURIComponent(email)}&id=${encodeURIComponent(id)}`);
-  // const data = await res.json();
-
-  const found = await fakeFindUser(email, id);
-
-  if (!found) {
-    searchErr.hidden = false;
-    animateShake(searchErr);
-    return;
+$("#pSave")?.addEventListener("click", async () => {
+  const nickname = ($("#pNick").value || "").trim();
+  try{
+    const j = await api("/api/profile/nickname", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ userId: state.me.id, nickname })
+    });
+    localStorage.setItem("fb_nickname", j.nickname);
+    state.me.nickname = j.nickname;
+    modal.hidden = true;
+    toastShow("Ќикнейм обновлЄн");
+    await loadDialogs();
+  }catch(e){
+    toastShow(e.message);
   }
-
-  searchErr.hidden = true;
-  addUserToList(found);
-  searchEmail.value = "";
-  searchId.value = "";
 });
 
-function animateShake(el) {
-  el.animate(
-    [{ transform: "translateX(0)" }, { transform: "translateX(-6px)" }, { transform: "translateX(6px)" }, { transform: "translateX(0)" }],
-    { duration: 220, easing: "ease-out" }
-  );
-}
+/* ---------------- Logout ---------------- */
+$("#btnLogout")?.addEventListener("click", () => {
+  localStorage.removeItem("fb_userId");
+  localStorage.removeItem("fb_email");
+  localStorage.removeItem("fb_nickname");
+  location.href = "./login.html";
+});
 
-function addUserToList(user) {
-  // remove empty state
-  usersEmpty.style.display = "none";
+/* ---------------- Calls tab ---------------- */
+$("#btnCalls")?.addEventListener("click", () => setView("calls"));
+$("#btnBackToChats")?.addEventListener("click", () => setView("chats"));
 
-  // avoid duplicates
-  const existing = usersList.querySelector(`[data-uid="${user.id}"]`);
-  if (existing) {
-    existing.scrollIntoView({ behavior: "smooth", block: "center" });
-    return;
+$$(".navbtn").forEach(btn => btn.addEventListener("click", () => setView(btn.dataset.view)));
+
+/* ---------------- WebSocket realtime ---------------- */
+
+function wsConnect() {
+  try{
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    state.ws = new WebSocket(`${proto}://${location.host}/ws?userId=${state.me.id}`);
+
+    state.ws.onmessage = async (ev) => {
+      let msg;
+      try{ msg = JSON.parse(ev.data); }catch{ return; }
+
+      if (msg.type === "message:new") {
+        const m = msg.message;
+
+        const isMine = Number(m.sender_id) === state.me.id;
+        const otherId = isMine ? Number(m.receiver_id) : Number(m.sender_id);
+
+        // If current open dialog matches Ч refresh thread + mark read
+        if (state.selected && Number(state.selected.id) === otherId && state.view === "chats") {
+          await loadThread(true);
+        } else {
+          toastShow("Ќовое сообщение");
+        }
+        await loadDialogs();
+      }
+
+      if (msg.type === "message:delete") {
+        // If current dialog open Ч refresh
+        if (state.selected && state.view === "chats") {
+          await loadThread(false);
+        }
+        await loadDialogs();
+      }
+
+      if (msg.type === "read:update") {
+        // just refresh dialogs (unread counters)
+        await loadDialogs();
+      }
+
+      if (msg.type === "profile:update") {
+        await loadDialogs();
+      }
+    };
+  }catch{
+    // ignore
   }
-
-  const card = document.createElement("div");
-  card.className = "user";
-  card.dataset.uid = user.id;
-  card.innerHTML = `
-    <div class="user-name">${escapeHtml(user.nick || user.email || ("User " + user.id))}</div>
-    <div class="user-sub">id: ${escapeHtml(String(user.id))}</div>
-  `;
-  card.addEventListener("click", () => selectUser(user, card));
-  usersList.prepend(card);
 }
 
-function selectUser(user, cardEl) {
-  state.selectedUser = user;
-  $$(".user").forEach(u => u.classList.remove("active"));
-  cardEl.classList.add("active");
-  chatTitle.textContent = `ƒиалог: ${user.nick || user.email || ("id " + user.id)}`;
-  state.view = "chats";
-  $$(".navbtn").forEach(b => b.classList.toggle("active", b.dataset.view === "chats"));
-  callsWrap.hidden = true;
+/* ---------------- Boot ---------------- */
+
+(function boot() {
+  if (!requireAuth()) return;
+
   syncRightPane();
-  loadMessages();
-}
-
-// Messages (stub UI)
-$("#btnRefresh").addEventListener("click", loadMessages);
-$("#btnSend").addEventListener("click", sendMessage);
-
-async function loadMessages() {
-  if (!state.selectedUser) return;
-
-  // Replace with your real API call
-  // const res = await fetch(`/api/messages?with=${state.selectedUser.id}`);
-  // const msgs = await res.json();
-
-  const msgs = await fakeMessages(state.selectedUser.id);
-
-  renderMessages(msgs);
-}
-
-function renderMessages(msgs) {
-  messagesEl.innerHTML = "";
-  msgs.forEach(m => {
-    const div = document.createElement("div");
-    div.className = "msg";
-    div.innerHTML = `
-      <div class="msg-meta">${escapeHtml(m.time)}</div>
-      <div class="msg-body">${renderMarkup(m.text)}</div>
-    `;
-    messagesEl.appendChild(div);
-  });
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-async function sendMessage() {
-  const text = msgInput.value.trim();
-  if (!text || !state.selectedUser) return;
-
-  msgInput.value = "";
-  formatBar.hidden = true;
-
-  // Replace with your real API call
-  // await fetch("/api/send", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ to: state.selectedUser.id, text }) });
-
-  await fakeSend(state.selectedUser.id, text);
-  await loadMessages();
-}
-
-// Calls buttons
-$("#btnCalls").addEventListener("click", () => {
-  $$(".navbtn").forEach(b => b.classList.toggle("active", b.dataset.view === "calls"));
-  setView("calls");
-});
-$("#btnBackToChats").addEventListener("click", () => {
-  $$(".navbtn").forEach(b => b.classList.toggle("active", b.dataset.view === "chats"));
   setView("chats");
-});
 
-// Toast
-function toastShow(text) {
-  toastText.textContent = text;
-  toast.hidden = false;
+  loadDialogs().catch(e => toastShow(e.message));
+  wsConnect();
 
-  // progress bar 1.5s and then fade out 1.5s
-  toastBarFill.animate(
-    [{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }],
-    { duration: 1500, easing: "linear", fill: "forwards" }
-  );
-
-  clearTimeout(state.toastTimer);
-  state.toastTimer = setTimeout(() => {
-    toast.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 1500, easing: "ease-out", fill: "forwards" });
-    setTimeout(() => (toast.hidden = true), 1500);
-  }, 1500);
-}
-
-// Init УmeФ from localStorage (until backend provides)
-(function initMe() {
-  state.me.nick = localStorage.getItem("fb_nick") || "";
-  // If your app already stores email/id in localStorage, you can wire them here:
-  // state.me.email = localStorage.getItem("userEmail") || "";
-  // state.me.id = localStorage.getItem("userId") || "";
+  // refresh dialogs regularly (0.5s as you wanted)
+  setInterval(() => {
+    loadDialogs().catch(()=>{});
+  }, 500);
 })();
-
-// Hide empty chat window per request
-syncRightPane();
-
-// If no users yet, keep empty block visible
-(function initUsersEmpty() {
-  if (!usersList.children.length) usersEmpty.style.display = "";
-})();
-
-// ---- Helpers ----
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function renderMarkup(text) {
-  // minimal safe markup: **bold**, _italic_, __underline__
-  let t = escapeHtml(text);
-
-  // underline __text__
-  t = t.replace(/__([^_]+)__/g, "<u>$1</u>");
-  // bold **text**
-  t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
-  // italic _text_
-  t = t.replace(/_([^_]+)_/g, "<i>$1</i>");
-
-  return t;
-}
-
-// ---- Fake backend for UI demo (remove when wiring real API) ----
-async function fakeFindUser(email, id) {
-  await wait(160);
-  const ok = (email && email.includes("@")) || (id && /^\d+$/.test(id));
-  if (!ok) return null;
-  return { id: id || String(Math.floor(Math.random() * 9000 + 1000)), email: email || `user${id}@mail.com`, nick: "" };
-}
-
-const FAKE = {};
-async function fakeMessages(uid) {
-  await wait(120);
-  FAKE[uid] = FAKE[uid] || [
-    { time: new Date().toLocaleString(), text: "ѕросто привет!" },
-  ];
-  return FAKE[uid];
-}
-async function fakeSend(uid, text) {
-  await wait(80);
-  FAKE[uid] = FAKE[uid] || [];
-  FAKE[uid].push({ time: new Date().toLocaleString(), text });
-  // simulate new message toast sometimes
-  if (Math.random() < 0.25) toastShow("Ќовое сообщение (демо)");
-}
-function wait(ms){ return new Promise(r => setTimeout(r, ms)); }

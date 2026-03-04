@@ -2,63 +2,67 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FroteBiteMessenger — Вход</title>
-  <link rel="stylesheet" href="/brand.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Войти — FroteBiteMessenger</title>
+  <link rel="stylesheet" href="./brand.css" />
 </head>
-<body>
-  <div class="auth-wrap">
-    <div class="auth-logo" id="authLogo"></div>
+<body class="theme-ember">
+  <div class="bg"></div>
 
-    <main class="shell">
-      <h1>Войти</h1>
-      <p class="sub">Введи почту и пароль.</p>
-
-      <label>Почта</label>
-      <input id="email" type="email" placeholder="name@example.com" autocomplete="email">
-
-      <label>Пароль</label>
-      <input id="password" type="password" placeholder="********" autocomplete="current-password">
-
-      <button class="btn" id="btn">Войти</button>
-
-      <div class="notice" id="notice"></div>
-
-      <div class="linkline show">
-        Нет аккаунта? <a href="/register.html">Зарегистрироваться</a>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo"><span class="logo-f">F</span><span class="logo-flame"></span></div>
+      <div class="brand-text">
+        <div class="brand-name">FroteBiteMessenger</div>
+        <div class="brand-sub">Sign in</div>
       </div>
-    </main>
-  </div>
+    </div>
+  </header>
 
-  <script type="module">
-    import { logoSVG, api, saveSession, loadSession } from "/brand.js";
+  <main class="auth">
+    <section class="auth-card glass">
+      <div class="auth-title">Войти</div>
+      <div class="auth-sub">Введи почту и пароль.</div>
 
-    document.getElementById("authLogo").innerHTML = `
-      ${logoSVG(56)}
-      <div class="title">FroteBiteMessenger</div>
-    `;
+      <div class="auth-row">
+        <input id="email" class="input" placeholder="Почта" autocomplete="email">
+        <input id="pass" class="input" placeholder="Пароль" type="password" autocomplete="current-password">
+        <button id="go" class="btn">Войти</button>
+      </div>
 
-    const existing = loadSession();
-    if(existing?.userId) location.href = "/app.html";
+      <div id="err" class="err" hidden></div>
 
-    const notice = document.getElementById("notice");
-    const showNotice = (t)=>{ notice.textContent=t; notice.classList.add("show"); };
+      <div class="auth-links">
+        Нет аккаунта? <a href="./register.html">Зарегистрироваться</a>
+      </div>
+    </section>
+  </main>
 
-    document.getElementById("btn").addEventListener("click", async () => {
-      const email = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value;
-      notice.classList.remove("show");
+  <script>
+    const $ = (s)=>document.querySelector(s);
+    const err = $("#err");
+
+    $("#go").addEventListener("click", async () => {
+      err.hidden = true;
+      const email = $("#email").value.trim();
+      const password = $("#pass").value;
 
       try{
-        const data = await api("/api/login", {
+        const r = await fetch("/api/login", {
           method:"POST",
           headers:{ "Content-Type":"application/json" },
           body: JSON.stringify({ email, password })
         });
-        saveSession({ userId: data.userId, email: data.email, nickname: data.nickname || null });
-        location.href = "/app.html";
+        const j = await r.json();
+        if(!r.ok) throw new Error(j.error || "Ошибка");
+
+        localStorage.setItem("fb_userId", String(j.userId));
+        localStorage.setItem("fb_email", j.email);
+        localStorage.setItem("fb_nickname", j.nickname || "");
+        location.href = "./chat.html";
       }catch(e){
-        showNotice("Ошибка входа: " + e.message);
+        err.textContent = e.message;
+        err.hidden = false;
       }
     });
   </script>
