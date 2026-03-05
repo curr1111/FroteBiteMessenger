@@ -1,1006 +1,708 @@
-﻿/* ==========================
-   FroteBiteMessenger — UI/Logic
+﻿/* ===============================
+   FroteBiteMessenger FRONT (FULL)
    Works with server.js endpoints:
-   /api/register, /api/login, /api/dialogs, /api/messages/thread, /api/messages/send
-   /api/messages/:id (DELETE), /api/profile, /api/user, /api/profile/nickname, /api/profile/phone
-   WebSocket: /ws?userId=...
-========================== */
+   /api/register, /api/login, /api/profile,
+   /api/profile/nickname, /api/profile/phone,
+   /api/dialogs, /api/users/find,
+   /api/messages/thread, /api/messages/send,
+   DELETE /api/messages/:id
+================================ */
 
-(function () {
-  const $ = (sel) => document.querySelector(sel);
-  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-
-  // ---------- Helpers ----------
-  const store = {
-    get(key, fallback = null) {
-      try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
-    },
-    set(key, val) { localStorage.setItem(key, JSON.stringify(val)); },
-    del(key) { localStorage.removeItem(key); },
-    clearAuth() {
-      store.del("fb_user");
-    }
+const FB = (() => {
+  const LS = {
+    userId: "fb_userId",
+    theme: "fb_theme",
+    nickname: "fb_nickname",
+    email: "fb_email"
   };
 
-  function setFadeIn() {
-    const overlay = $("#fadeOverlay");
-    if (!overlay) return;
-    requestAnimationFrame(() => overlay.classList.add("off"));
+  function $(id){ return document.getElementById(id); }
+
+  function setTheme(theme){
+    const body = document.body;
+    body.classList.remove("theme-ember","theme-sunset","theme-midnight","theme-aurora");
+    body.classList.add(theme);
+    localStorage.setItem(LS.theme, theme);
   }
 
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function getTheme(){
+    return localStorage.getItem(LS.theme) || "theme-ember";
+  }
 
-  function fmtDate(iso) {
-    if (!iso) return "—";
-    try {
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  // Allow basic b/i/u tags only (because formatting buttons wrap selection)
+  function renderRichText(s){
+    // escape first
+    let x = escapeHtml(s);
+    // allow only our simple tags if they exist as text
+    x = x
+      .replaceAll("&lt;b&gt;","<b>").replaceAll("&lt;/b&gt;","</b>")
+      .replaceAll("&lt;i&gt;","<i>").replaceAll("&lt;/i&gt;","</i>")
+      .replaceAll("&lt;u&gt;","<u>").replaceAll("&lt;/u&gt;","</u>");
+    return x;
+  }
+
+  function fmtTime(iso){
+    try{
       const d = new Date(iso);
-      return d.toLocaleString("ru-RU", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" });
-    } catch {
-      return iso;
+      return d.toLocaleString();
+    }catch{
+      return String(iso||"");
     }
   }
 
-  function showError(el, msg) {
-    if (!el) return;
-    el.textContent = msg || "";
-    if (!msg) { el.classList.remove("show"); return; }
-    el.classList.add("show");
-  }
-
-  async function api(path, opts = {}) {
-    const res = await fetch(path, {
-      headers: { "Content-Type": "application/json" },
-      ...opts
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const err = data?.error || `HTTP ${res.status}`;
-      throw new Error(err);
-    }
+  async function api(url, opts){
+    const res = await fetch(url, opts);
+    const data = await res.json().catch(()=> ({}));
+    if(!res.ok) throw new Error(data.error || ("HTTP " + res.status));
     return data;
   }
 
-  // Basic HTML sanitizer: allow only a small subset
-  function sanitizeHtml(html) {
-    if (!html) return "";
-    // remove scripts/styles
-    html = html.replace(/<\s*script[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, "");
-    html = html.replace(/<\s*style[^>]*>[\s\S]*?<\s*\/\s*style\s*>/gi, "");
-
-    // allow only b,i,u,br,div,span
-    // strip other tags to text
-    html = html.replace(/<\/?(?!b|i|u|br|div|span)\w+[^>]*>/gi, "");
-
-    // strip dangerous attrs
-    html = html.replace(/\son\w+="[^"]*"/gi, "");
-    html = html.replace(/\son\w+='[^']*'/gi, "");
-    html = html.replace(/\sstyle="[^"]*"/gi, ""); // no inline styles
-    html = html.replace(/\sstyle='[^']*'/gi, "");
-    return html;
+  function requireUserId(){
+    const id = Number(localStorage.getItem(LS.userId));
+    return id || 0;
   }
 
-  function plainFromHtml(html) {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html || "";
-    return (tmp.textContent || "").trim();
+  function logout(){
+    localStorage.removeItem(LS.userId);
+    localStorage.removeItem(LS.nickname);
+    localStorage.removeItem(LS.email);
+    location.href = "login.html";
   }
 
-  function toast(title, sub) {
-    const wrap = $("#toasts");
-    if (!wrap) return;
-    const t = document.createElement("div");
-    t.className = "toast";
-    t.innerHTML = `
-      <div class="toast-title"></div>
-      <div class="toast-sub"></div>
-      <div class="toast-bar"></div>
-    `;
-    t.querySelector(".toast-title").textContent = title || "Уведомление";
-    t.querySelector(".toast-sub").textContent = sub || "";
-    wrap.appendChild(t);
+  // ================= AUTH =================
+  function initAuthPage(kind){
+    setTheme(getTheme());
 
-    // fade after 1.5s bar ends
-    setTimeout(() => t.classList.add("fade"), 1500);
-    setTimeout(() => t.remove(), 1500 + 1500);
-  }
+    if(kind === "register"){
+      const form = $("registerForm");
+      const err = $("regErr");
+      $("toLogin").onclick = () => location.href = "login.html";
 
-  // ---------- Theme ----------
-  function applyTheme(theme) {
-    document.body.setAttribute("data-theme", theme);
-    store.set("fb_theme", theme);
-  }
-
-  function initTheme() {
-    const theme = store.get("fb_theme", "ember");
-    applyTheme(theme);
-  }
-
-  // ---------- Auth pages ----------
-  async function initRegister() {
-    const form = $("#registerForm");
-    if (!form) return;
-
-    const errEl = $("#authError");
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      showError(errEl, "");
-
-      const email = ($("#regEmail")?.value || "").trim();
-      const password = ($("#regPass")?.value || "");
-
-      try {
-        const r = await api("/api/register", {
-          method: "POST",
-          body: JSON.stringify({ email, password })
-        });
-
-        // after register -> go login
-        toast("Аккаунт создан ✅", "Теперь войди в аккаунт");
-        await sleep(400);
-        location.href = "login.html";
-      } catch (e2) {
-        showError(errEl, e2.message);
-      }
-    });
-  }
-
-  async function initLogin() {
-    const form = $("#loginForm");
-    if (!form) return;
-
-    const errEl = $("#authError");
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      showError(errEl, "");
-
-      const email = ($("#loginEmail")?.value || "").trim();
-      const password = ($("#loginPass")?.value || "");
-
-      try {
-        const r = await api("/api/login", {
-          method: "POST",
-          body: JSON.stringify({ email, password })
-        });
-
-        store.set("fb_user", {
-          userId: r.userId,
-          email: r.email,
-          nickname: r.nickname || null
-        });
-
-        location.href = "chat.html";
-      } catch (e2) {
-        showError(errEl, e2.message);
-      }
-    });
-  }
-
-  // ---------- Chat page state ----------
-  const state = {
-    me: null,              // {userId,email,nickname}
-    ws: null,
-    wsReady: false,
-    dialogs: [],
-    activeOtherId: null,
-    activeOther: null,     // {id,email,nickname,created_at,phone}
-    thread: [],
-    replyTo: null,         // message object
-    knownMessageIds: new Set(),
-    lastToastByDialog: new Map(), // otherId->timestamp
-    calls: []
-  };
-
-  function requireAuth() {
-    const me = store.get("fb_user", null);
-    if (!me || !me.userId) {
-      location.href = "login.html";
-      return null;
-    }
-    return me;
-  }
-
-  // ---------- UI refs ----------
-  function ui() {
-    return {
-      topStatus: $("#topStatus"),
-      btnLogout: $("#btnLogout"),
-      btnSettings: $("#btnSettings"),
-
-      tabChats: $("#tabChats"),
-      tabCalls: $("#tabCalls"),
-      viewChats: $("#viewChats"),
-      viewCalls: $("#viewCalls"),
-
-      dialogs: $("#dialogs"),
-      btnAddUser: $("#btnAddUser"),
-      searchEmail: $("#searchEmail"),
-      searchId: $("#searchId"),
-      searchHint: $("#searchHint"),
-      searchError: $("#searchError"),
-
-      noChat: $("#noChat"),
-      threadWrap: $("#threadWrap"),
-      thread: $("#thread"),
-      emptyThread: $("#emptyThread"),
-
-      chatWithName: $("#chatWithName"),
-      btnOpenUserCard: $("#btnOpenUserCard"),
-      btnCall: $("#btnCall"),
-      btnRefresh: $("#btnRefresh"),
-      btnSend: $("#btnSend"),
-      btnDone: $("#btnDone"),
-
-      editor: $("#editor"),
-      formatBar: $("#formatBar"),
-      replyBox: $("#replyBox"),
-      replyPreview: $("#replyPreview"),
-      replyCancel: $("#replyCancel"),
-
-      ctx: $("#ctx"),
-      ctxReply: $("#ctxReply"),
-      ctxDelete: $("#ctxDelete"),
-
-      modalBackdrop: $("#modalBackdrop"),
-      settingsModal: $("#settingsModal"),
-      modalClose: $("#modalClose"),
-      openThemes: $("#openThemes"),
-      openProfile: $("#openProfile"),
-      settingsPane: $("#settingsPane"),
-      paneThemes: $("#paneThemes"),
-      paneProfile: $("#paneProfile"),
-      paneUser: $("#paneUser"),
-
-      myNick: $("#myNick"),
-      myEmail: $("#myEmail"),
-      myCreated: $("#myCreated"),
-      myId: $("#myId"),
-      myPhone: $("#myPhone"),
-      editNick: $("#editNick"),
-      addPhone: $("#addPhone"),
-
-      otherNick: $("#otherNick"),
-      otherEmail: $("#otherEmail"),
-      otherCreated: $("#otherCreated"),
-      otherId: $("#otherId"),
-      otherPhone: $("#otherPhone"),
-
-      callsLog: $("#callsLog"),
-    };
-  }
-
-  // ---------- View switching ----------
-  function setView(name) {
-    const U = ui();
-    const chats = U.viewChats;
-    const calls = U.viewCalls;
-
-    if (!chats || !calls) return;
-
-    if (name === "calls") {
-      chats.classList.remove("view-active");
-      calls.classList.add("view-active");
-      U.tabChats?.classList.remove("active");
-      U.tabCalls?.classList.add("active");
-    } else {
-      calls.classList.remove("view-active");
-      chats.classList.add("view-active");
-      U.tabCalls?.classList.remove("active");
-      U.tabChats?.classList.add("active");
-    }
-  }
-
-  // ---------- Settings modal ----------
-  function openModal() {
-    const U = ui();
-    U.modalBackdrop?.classList.remove("hidden");
-    U.settingsModal?.classList.remove("hidden");
-    // default to menu only (no pane)
-    showPane(null);
-  }
-  function closeModal() {
-    const U = ui();
-    U.modalBackdrop?.classList.add("hidden");
-    U.settingsModal?.classList.add("hidden");
-  }
-
-  function showPane(which) {
-    const U = ui();
-    [U.paneThemes, U.paneProfile, U.paneUser].forEach(p => p?.classList.add("hidden"));
-    if (which === "themes") U.paneThemes?.classList.remove("hidden");
-    if (which === "profile") U.paneProfile?.classList.remove("hidden");
-    if (which === "user") U.paneUser?.classList.remove("hidden");
-  }
-
-  async function loadMyProfile() {
-    const U = ui();
-    const me = state.me;
-    if (!me) return;
-
-    const r = await api(`/api/profile?userId=${me.userId}`);
-    const u = r.user;
-
-    U.myNick.textContent = u.nickname || (me.nickname || "Без никнейма");
-    U.myEmail.textContent = u.email;
-    U.myCreated.textContent = fmtDate(u.created_at);
-    U.myId.textContent = String(u.id);
-    U.myPhone.textContent = u.phone ? u.phone : "—";
-  }
-
-  async function loadOtherProfile(otherId) {
-    const U = ui();
-    const r = await api(`/api/user?id=${otherId}`);
-    const u = r.user;
-
-    const nick = u.nickname ? u.nickname : "Пользователь без никнейма";
-    U.otherNick.textContent = nick;
-    U.otherEmail.textContent = u.email ? `Почта: ${u.email}` : "Данный пользователь не добавил почту.";
-    U.otherCreated.textContent = u.created_at ? fmtDate(u.created_at) : "Данный пользователь не добавил дату.";
-    U.otherId.textContent = String(u.id);
-    U.otherPhone.textContent = u.phone ? u.phone : "Данный пользователь не добавил номер телефона.";
-
-    state.activeOther = u;
-  }
-
-  // ---------- Dialogs ----------
-  function dialogTitle(d) {
-    const nick = d.nickname || "";
-    if (nick.trim()) return nick;
-    // show masked email
-    const email = d.email || "";
-    return email || `User ${d.other_id}`;
-  }
-
-  function renderDialogs() {
-    const U = ui();
-    const box = U.dialogs;
-    if (!box) return;
-
-    box.innerHTML = "";
-
-    if (!state.dialogs.length) {
-      const empty = document.createElement("div");
-      empty.className = "soft-hint";
-      empty.textContent = "Пока нет диалогов. Добавь пользователя по почте/ID и начни переписку.";
-      box.appendChild(empty);
-      return;
-    }
-
-    for (const d of state.dialogs) {
-      const el = document.createElement("div");
-      el.className = "dialog" + (state.activeOtherId === d.other_id ? " active" : "");
-      el.dataset.otherId = String(d.other_id);
-
-      const title = dialogTitle(d);
-      const last = d.last_text ? plainFromHtml(d.last_text) : "";
-      const when = d.last_created_at ? fmtDate(d.last_created_at) : "";
-
-      el.innerHTML = `
-        <div class="dialog-name"></div>
-        <div class="dialog-sub"></div>
-      `;
-      el.querySelector(".dialog-name").textContent = title;
-      el.querySelector(".dialog-sub").textContent = last ? `${last.slice(0, 38)}${last.length>38?"…":""} • ${when}` : `Без сообщений • ${when}`;
-
-      if ((d.unread_count || 0) > 0) {
-        const b = document.createElement("div");
-        b.className = "badge";
-        b.textContent = String(d.unread_count);
-        el.appendChild(b);
-      }
-
-      el.addEventListener("click", () => {
-        openDialog(d.other_id, d);
-      });
-
-      box.appendChild(el);
-    }
-  }
-
-  async function fetchDialogs() {
-    if (!state.me) return;
-    const r = await api(`/api/dialogs?me=${state.me.userId}`);
-    state.dialogs = r.dialogs || [];
-    renderDialogs();
-  }
-
-  // ---------- Thread ----------
-  function showChatArea(active) {
-    const U = ui();
-    if (!U.noChat || !U.threadWrap) return;
-
-    if (!active) {
-      U.noChat.classList.remove("hidden");
-      U.threadWrap.classList.add("hidden");
-      U.btnCall.disabled = true;
-      U.btnOpenUserCard.disabled = true;
-      U.chatWithName.textContent = "—";
-      return;
-    }
-
-    U.noChat.classList.add("hidden");
-    U.threadWrap.classList.remove("hidden");
-    U.btnCall.disabled = false;
-    U.btnOpenUserCard.disabled = false;
-  }
-
-  function renderThread() {
-    const U = ui();
-    const box = U.thread;
-    if (!box) return;
-
-    box.innerHTML = "";
-
-    if (!state.thread.length) {
-      U.emptyThread?.classList.remove("hidden");
-    } else {
-      U.emptyThread?.classList.add("hidden");
-    }
-
-    for (const m of state.thread) {
-      const mine = m.sender_id === state.me.userId;
-      const msg = document.createElement("div");
-      msg.className = "msg" + (mine ? " me" : "");
-      msg.dataset.mid = String(m.id);
-
-      const textHtml = sanitizeHtml(m.text);
-      const created = fmtDate(m.created_at);
-
-      let replyBlock = "";
-      if (m.reply_to_message_id) {
-        const repText = m.reply_text ? plainFromHtml(m.reply_text) : "(сообщение не найдено)";
-        replyBlock = `<div class="reply"><b>Ответ</b><div>${escapeHtml(repText).slice(0,120)}</div></div>`;
-      }
-
-      msg.innerHTML = `
-        ${replyBlock}
-        <div class="text"></div>
-        <div class="meta"></div>
-      `;
-
-      msg.querySelector(".text").innerHTML = textHtml;
-      msg.querySelector(".meta").textContent = created;
-
-      // context menu
-      msg.addEventListener("contextmenu", (e) => {
+      form.onsubmit = async (e) => {
         e.preventDefault();
-        openCtx(e.clientX, e.clientY, m);
-      });
+        err.textContent = "";
+        const email = $("regEmail").value.trim();
+        const password = $("regPass").value;
 
-      box.appendChild(msg);
-      state.knownMessageIds.add(m.id);
-    }
-
-    // scroll to bottom
-    box.scrollTop = box.scrollHeight;
-  }
-
-  function escapeHtml(s) {
-    return String(s || "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  async function fetchThread(otherId) {
-    const me = state.me.userId;
-    const r = await api(`/api/messages/thread?me=${me}&with=${otherId}`);
-    state.thread = (r.messages || []).map(x => ({
-      ...x,
-      text: x.text || ""
-    }));
-    renderThread();
-  }
-
-  async function openDialog(otherId, dialogRow) {
-    state.activeOtherId = Number(otherId);
-    showChatArea(true);
-
-    const U = ui();
-    // update title from dialog info immediately
-    const title = dialogRow ? dialogTitle(dialogRow) : `ID ${otherId}`;
-    U.chatWithName.textContent = title;
-
-    renderDialogs();
-    await loadOtherProfile(otherId).catch(() => { /* ignore */ });
-    await fetchThread(otherId);
-  }
-
-  // ---------- Add user (only if exists) ----------
-  let searchTimer = null;
-
-  function clearSearchError() {
-    const U = ui();
-    U.searchError.textContent = "";
-    U.searchError.classList.remove("show");
-  }
-
-  async function trySearchUser() {
-    const U = ui();
-    clearSearchError();
-
-    const email = (U.searchEmail.value || "").trim().toLowerCase();
-    const idStr = (U.searchId.value || "").trim();
-
-    if (!email && !idStr) return;
-
-    // We have only /api/users (list) right now -> find match
-    const r = await api("/api/users");
-    const users = r.users || [];
-
-    let found = null;
-
-    if (idStr) {
-      const id = Number(idStr);
-      if (id) found = users.find(u => Number(u.id) === id) || null;
-    }
-    if (!found && email) {
-      found = users.find(u => (u.email || "").toLowerCase() === email) || null;
-    }
-
-    if (!found) {
-      U.searchError.textContent = "Почта или айди введены неверно, никого не найдено";
-      U.searchError.classList.add("show");
-      return;
-    }
-
-    // Create dialog visually only after there are messages.
-    // But we can open chat with this user so you can write first message.
-    toast("Пользователь найден ✅", `${found.nickname || found.email} (id: ${found.id})`);
-    await openDialog(found.id, { other_id: found.id, email: found.email, nickname: found.nickname, last_text:"", last_created_at:"", unread_count:0 });
-  }
-
-  function bindSearchInputs() {
-    const U = ui();
-    if (!U.searchEmail || !U.searchId) return;
-
-    const onInput = () => {
-      clearSearchError();
-      if (searchTimer) clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => trySearchUser().catch((e)=> {
-        U.searchError.textContent = e.message;
-        U.searchError.classList.add("show");
-      }), 250);
-    };
-
-    U.searchEmail.addEventListener("input", onInput);
-    U.searchId.addEventListener("input", onInput);
-  }
-
-  // ---------- Editor: smooth char animation ----------
-  function setupEditor() {
-    const U = ui();
-    const ed = U.editor;
-    if (!ed) return;
-
-    // Wrap inserted text as spans to animate.
-    // We'll intercept plain text paste & typing via input event.
-    let lastHtml = ed.innerHTML;
-
-    ed.addEventListener("paste", (e) => {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData("text/plain");
-      insertAnimatedText(text);
-    });
-
-    function insertAnimatedText(text) {
-      // Insert as spans at caret
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-      const range = sel.getRangeAt(0);
-      range.deleteContents();
-
-      const frag = document.createDocumentFragment();
-      for (const ch of text) {
-        if (ch === "\n") {
-          frag.appendChild(document.createElement("br"));
-          continue;
+        try{
+          await api("/api/register", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify({ email, password })
+          });
+          // auto go to login
+          location.href = "login.html";
+        }catch(ex){
+          err.textContent = ex.message;
         }
-        const span = document.createElement("span");
-        span.className = "char";
-        span.textContent = ch;
-        frag.appendChild(span);
-      }
-      range.insertNode(frag);
-      // move caret to end
-      sel.collapseToEnd();
+      };
     }
 
-    ed.addEventListener("beforeinput", (e) => {
-      // For normal typing insert animated span
-      if (e.inputType === "insertText" && e.data) {
+    if(kind === "login"){
+      const form = $("loginForm");
+      const err = $("logErr");
+      $("toRegister").onclick = () => location.href = "register.html";
+
+      form.onsubmit = async (e) => {
         e.preventDefault();
-        insertAnimatedText(e.data);
+        err.textContent = "";
+        const email = $("logEmail").value.trim();
+        const password = $("logPass").value;
+
+        try{
+          const r = await api("/api/login", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify({ email, password })
+          });
+
+          localStorage.setItem(LS.userId, String(r.user.id));
+          localStorage.setItem(LS.email, r.user.email);
+          localStorage.setItem(LS.nickname, r.user.nickname || "");
+          location.href = "chat.html"; // <-- IMPORTANT, no loop
+        }catch(ex){
+          err.textContent = ex.message;
+        }
+      };
+    }
+  }
+
+  // ================= CHAT =================
+  function initChatPage(){
+    setTheme(getTheme());
+    const me = requireUserId();
+    if(!me) return location.href = "login.html";
+
+    // UI refs
+    const dialogsEl = $("dialogs");
+    const chatBody = $("chatBody");
+    const emptyHint = $("emptyHint");
+    const chatWithLabel = $("chatWithLabel");
+    const modeLabel = $("modeLabel");
+    const msgText = $("msgText");
+    const findEmail = $("findEmail");
+    const findId = $("findId");
+    const findErr = $("findErr");
+    const chatCard = $("chatCard");
+
+    const toast = $("toast");
+    const toastT1 = $("toastT1");
+    const toastT2 = $("toastT2");
+
+    const ctx = $("ctx");
+    const ctxReply = $("ctxReply");
+    const ctxDelete = $("ctxDelete");
+
+    const settingsModal = $("settingsModal");
+    const themesBlock = $("themesBlock");
+    const profileBlock = $("profileBlock");
+    const themeChips = $("themeChips");
+    const profileInfo = $("profileInfo");
+    const nicknameInput = $("nicknameInput");
+    const phoneInput = $("phoneInput");
+    const profileErr = $("profileErr");
+
+    const userModal = $("userModal");
+    const userInfo = $("userInfo");
+
+    let currentWith = 0;
+    let currentWithUser = null;
+    let replyTo = null;
+    let lastKnownDialogLastId = new Map(); // other_id -> last_id (for toast)
+
+    // ---------- events ----------
+    $("logoutBtn").onclick = logout;
+
+    $("settingsBtn").onclick = () => {
+      settingsModal.classList.add("show");
+      themesBlock.style.display = "none";
+      profileBlock.style.display = "none";
+      profileErr.textContent = "";
+    };
+    $("closeSettings").onclick = () => settingsModal.classList.remove("show");
+    settingsModal.addEventListener("click", (e)=> {
+      if(e.target === settingsModal) settingsModal.classList.remove("show");
+    });
+
+    $("openThemes").onclick = () => {
+      themesBlock.style.display = "block";
+      profileBlock.style.display = "none";
+      renderThemeChips();
+    };
+
+    $("openProfile").onclick = async () => {
+      themesBlock.style.display = "none";
+      profileBlock.style.display = "block";
+      profileErr.textContent = "";
+      await loadMyProfile();
+    };
+
+    $("closeUserModal").onclick = () => userModal.classList.remove("show");
+    userModal.addEventListener("click", (e)=> {
+      if(e.target === userModal) userModal.classList.remove("show");
+    });
+
+    $("refreshBtn").onclick = async () => {
+      await refreshDialogs(true);
+      if(currentWith) await loadThread(currentWith, true);
+    };
+
+    $("doneBtn").onclick = async () => {
+      if(currentWith){
+        await markReadCurrent();
+        await refreshDialogs(true);
       }
-      // allow delete/backspace
-    });
-
-    // selection toolbar
-    const showFormatBarIfSelection = () => {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) { U.formatBar.classList.add("hidden"); return; }
-      const isCollapsed = sel.isCollapsed;
-      const inside = sel.anchorNode && ed.contains(sel.anchorNode);
-      if (!inside) { U.formatBar.classList.add("hidden"); return; }
-      if (isCollapsed) { U.formatBar.classList.add("hidden"); return; }
-      U.formatBar.classList.remove("hidden");
     };
 
-    document.addEventListener("selectionchange", showFormatBarIfSelection);
-
-    // formatting
-    U.formatBar?.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-format]");
-      if (!btn) return;
-      const fmt = btn.dataset.format;
-      try {
-        document.execCommand(fmt, false, null);
-      } catch {}
-      ed.focus();
-    });
-  }
-
-  function editorGetHtml() {
-    const ed = ui().editor;
-    if (!ed) return "";
-    // keep only small tags (b,i,u,br,span,div)
-    const html = sanitizeHtml(ed.innerHTML);
-    return html.trim();
-  }
-
-  function editorClear() {
-    const ed = ui().editor;
-    if (!ed) return;
-    ed.innerHTML = "";
-  }
-
-  // ---------- Reply ----------
-  function setReply(msg) {
-    state.replyTo = msg;
-    const U = ui();
-    if (!msg) {
-      U.replyBox.classList.add("hidden");
-      U.replyPreview.textContent = "";
-      return;
-    }
-    U.replyBox.classList.remove("hidden");
-    const txt = plainFromHtml(msg.text || "");
-    U.replyPreview.textContent = txt.slice(0, 220);
-  }
-
-  // ---------- Send message ----------
-  async function sendMessage() {
-    if (!state.activeOtherId) {
-      toast("Выбери диалог", "Сначала выбери пользователя слева");
-      return;
-    }
-    const html = editorGetHtml();
-    const plain = plainFromHtml(html);
-
-    if (!plain) {
-      toast("Пустое сообщение", "Напиши хоть что-то 🙂");
-      return;
-    }
-
-    const payload = {
-      senderId: state.me.userId,
-      receiverId: state.activeOtherId,
-      text: html,
-      replyToMessageId: state.replyTo ? state.replyTo.id : null
+    $("sendBtn").onclick = async () => {
+      await sendMessage();
     };
 
-    await api("/api/messages/send", { method: "POST", body: JSON.stringify(payload) });
-    editorClear();
-    setReply(null);
-  }
+    // add by find
+    $("addBtn").onclick = async () => {
+      findErr.textContent = "";
+      const email = findEmail.value.trim();
+      const id = findId.value.trim();
 
-  // ---------- Context menu ----------
-  let ctxMsg = null;
+      if(!email && !id){
+        findErr.textContent = "Введите почту или ID";
+        return;
+      }
 
-  function openCtx(x, y, msg) {
-    const U = ui();
-    ctxMsg = msg;
+      try{
+        const q = new URLSearchParams();
+        if(email) q.set("email", email);
+        if(id) q.set("id", id);
+        const r = await api("/api/users/find?" + q.toString());
+        // open dialog (it appears after first message anyway)
+        openDialog(r.user);
+      }catch(ex){
+        findErr.textContent = "Почта или айди введены неверно, никого не найдено";
+        animateError(findErr);
+      }
+    };
 
-    const m = U.ctx;
-    m.classList.remove("hidden");
-    m.style.left = Math.min(x, window.innerWidth - 180) + "px";
-    m.style.top = Math.min(y, window.innerHeight - 140) + "px";
-  }
+    // selection format bar
+    msgText.addEventListener("mouseup", () => updateFormatBar());
+    msgText.addEventListener("keyup", () => updateFormatBar());
+    msgText.addEventListener("select", () => updateFormatBar());
 
-  function closeCtx() {
-    const U = ui();
-    ctxMsg = null;
-    U.ctx.classList.add("hidden");
-  }
+    $("formatBar").addEventListener("click", (e)=> {
+      const btn = e.target.closest("button[data-fmt]");
+      if(!btn) return;
+      applyFormat(btn.dataset.fmt);
+      msgText.focus();
+      updateFormatBar();
+    });
 
-  async function deleteMsg(msg) {
-    if (!msg) return;
-    // animate like Telegram
-    const el = document.querySelector(`.msg[data-mid="${msg.id}"]`);
-    if (el) el.classList.add("deleting");
+    // tabs (chats / calls)
+    $("tabChats").onclick = () => switchTab("chats");
+    $("tabCalls").onclick = () => switchTab("calls");
 
-    await sleep(160);
-    await api(`/api/messages/${msg.id}?requesterId=${state.me.userId}`, { method: "DELETE" });
-  }
+    // call button
+    $("callBtn").onclick = () => {
+      if(!currentWith){
+        showToast("Звонки", "Сначала выбери диалог 🙂", 2200);
+        return;
+      }
+      showToast("Звонок", "Пока без звука. Идёт вызов…", 2500);
+    };
 
-  // ---------- WebSocket ----------
-  function connectWS() {
-    if (!state.me) return;
-    const U = ui();
+    // click on header nickname -> open user profile modal
+    chatWithLabel.onclick = async () => {
+      if(!currentWithUser) return;
+      await showUserProfile(currentWithUser.id);
+    };
 
-    try {
-      const proto = location.protocol === "https:" ? "wss" : "ws";
-      const wsUrl = `${proto}://${location.host}/ws?userId=${state.me.userId}`;
-      const ws = new WebSocket(wsUrl);
-      state.ws = ws;
+    // context menu close
+    document.addEventListener("click", () => ctx.classList.remove("show"));
+    window.addEventListener("scroll", () => ctx.classList.remove("show"), true);
 
-      ws.onopen = () => {
-        state.wsReady = true;
-        if (U.topStatus) U.topStatus.textContent = "Онлайн";
+    // initial
+    renderThemeChips();
+    refreshDialogs(true);
+    setupWebSocket();
+
+    // periodic refresh
+    setInterval(async () => {
+      await refreshDialogs(false);
+      if(currentWith) await loadThread(currentWith, false);
+    }, 500);
+
+    // ---------- functions ----------
+    function animateError(el){
+      el.animate(
+        [{transform:"translateX(0)"},{transform:"translateX(-6px)"},{transform:"translateX(6px)"},{transform:"translateX(0)"}],
+        {duration:240, easing:"ease-out"}
+      );
+    }
+
+    function renderThemeChips(){
+      const themes = [
+        {id:"theme-ember", name:"Ember"},
+        {id:"theme-sunset", name:"Sunset"},
+        {id:"theme-midnight", name:"Midnight"},
+        {id:"theme-aurora", name:"Aurora"},
+      ];
+      themeChips.innerHTML = "";
+      const active = getTheme();
+      for(const t of themes){
+        const b = document.createElement("div");
+        b.className = "chip" + (t.id === active ? " active" : "");
+        b.textContent = t.name;
+        b.onclick = () => {
+          setTheme(t.id);
+          renderThemeChips();
+        };
+        themeChips.appendChild(b);
+      }
+    }
+
+    async function loadMyProfile(){
+      const r = await api("/api/profile?userId=" + me);
+      const u = r.user;
+      nicknameInput.value = u.nickname || "";
+      phoneInput.value = u.phone || "";
+
+      profileInfo.innerHTML = `
+        <div><b>Почта</b> — ${escapeHtml(u.email)}</div>
+        <div><b>ID</b> — ${escapeHtml(u.id)}</div>
+        <div><b>Дата создания аккаунта</b> — ${escapeHtml(fmtTime(u.created_at))}</div>
+        <div><b>Номер телефона</b> — ${u.phone ? escapeHtml(u.phone) : `<span style="color:rgba(255,255,255,.55)">— не добавлен</span>`}</div>
+        <div><b>Никнейм</b> — ${u.nickname ? escapeHtml(u.nickname) : `<span style="color:rgba(255,255,255,.55)">— не задан</span>`}</div>
+      `;
+
+      $("saveNick").onclick = async () => {
+        profileErr.textContent = "";
+        try{
+          const nn = nicknameInput.value.trim();
+          const rr = await api("/api/profile/nickname", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify({ userId: me, nickname: nn })
+          });
+          localStorage.setItem(LS.nickname, rr.nickname);
+          await loadMyProfile();
+          showToast("Профиль", "Никнейм обновлён", 2200);
+        }catch(ex){
+          profileErr.textContent = ex.message;
+          animateError(profileErr);
+        }
       };
 
-      ws.onclose = () => {
-        state.wsReady = false;
-        if (U.topStatus) U.topStatus.textContent = "Оффлайн (переподключение…)";
-        setTimeout(connectWS, 1200);
+      $("savePhone").onclick = async () => {
+        profileErr.textContent = "";
+        try{
+          const ph = phoneInput.value.trim();
+          const rr = await api("/api/profile/phone", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify({ userId: me, phone: ph })
+          });
+          await loadMyProfile();
+          showToast("Профиль", "Телефон сохранён", 2200);
+        }catch(ex){
+          profileErr.textContent = ex.message;
+          animateError(profileErr);
+        }
       };
+    }
 
-      ws.onmessage = async (ev) => {
-        let data = null;
-        try { data = JSON.parse(ev.data); } catch { return; }
+    async function showUserProfile(uid){
+      const r = await api("/api/profile?userId=" + uid);
+      const u = r.user;
 
-        if (data.type === "ws:ready") {
+      const phone = u.phone ? escapeHtml(u.phone) : `данный пользователь не добавил номер телефона.`;
+      const nickname = u.nickname ? escapeHtml(u.nickname) : `данный пользователь не добавил никнейм.`;
+
+      userInfo.innerHTML = `
+        <div style="display:flex; gap:12px; align-items:center">
+          <div style="width:62px;height:62px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10);display:flex;align-items:center;justify-content:center;font-size:28px">👤</div>
+          <div>
+            <div style="font-weight:900;font-size:18px">${escapeHtml(u.email)}</div>
+            <div style="color:rgba(255,255,255,.60);font-weight:800">ID: ${escapeHtml(u.id)}</div>
+          </div>
+        </div>
+        <div style="margin-top:12px"><b>Дата создания аккаунта</b> — ${escapeHtml(fmtTime(u.created_at))}</div>
+        <div style="margin-top:8px"><b>Телефон</b> — ${phone}</div>
+        <div style="margin-top:8px"><b>Никнейм</b> — ${nickname}</div>
+      `;
+
+      userModal.classList.add("show");
+    }
+
+    function switchTab(tab){
+      chatCard.classList.add("switching");
+      setTimeout(()=> chatCard.classList.remove("switching"), 280);
+
+      if(tab === "chats"){
+        $("tabChats").classList.add("active");
+        $("tabCalls").classList.remove("active");
+        modeLabel.textContent = "Chats";
+        // show main chat layout (already is)
+      }else{
+        $("tabCalls").classList.add("active");
+        $("tabChats").classList.remove("active");
+        modeLabel.textContent = "Calls";
+        // calls mode - just toast for now (UI later)
+        showToast("Звонки", "Вкладка готовится. Сейчас кнопка “Позвонить” работает как демо.", 3200);
+      }
+    }
+
+    function openDialog(user){
+      currentWith = user.id;
+      currentWithUser = user;
+      chatWithLabel.textContent = user.nickname ? `${user.nickname} (${user.email})` : user.email;
+      loadThread(currentWith, true);
+      refreshDialogs(true);
+    }
+
+    function setEmptyHint(on){
+      emptyHint.style.display = on ? "block" : "none";
+    }
+
+    async function refreshDialogs(force){
+      try{
+        const r = await api("/api/dialogs?me=" + me);
+        const dialogs = r.dialogs || [];
+
+        // toast logic: if new message in another dialog
+        for(const d of dialogs){
+          const prev = lastKnownDialogLastId.get(d.other_id) || 0;
+          if(d.last_id && d.last_id > prev){
+            lastKnownDialogLastId.set(d.other_id, d.last_id);
+
+            // if it is NOT current chat and last message from other -> toast
+            if(d.other_id !== currentWith && d.last_sender_id === d.other_id){
+              const title = "Новое сообщение";
+              const who = d.nickname ? d.nickname : d.email;
+              showToast(title, `${who}: ${d.last_text}`, 4000);
+            }
+          }
+        }
+
+        dialogsEl.innerHTML = "";
+
+        if(dialogs.length === 0){
+          const empty = document.createElement("div");
+          empty.style.color = "rgba(255,255,255,.55)";
+          empty.style.fontWeight = "900";
+          empty.style.padding = "10px 6px";
+          empty.textContent = "Пока нет диалогов. Добавь пользователя по почте или ID.";
+          dialogsEl.appendChild(empty);
           return;
         }
 
-        if (data.type === "message:new") {
-          const m = data.message;
-          // If current thread matches, append and render fast
-          const inThisDialog =
-            (Number(m.sender_id) === state.activeOtherId && Number(m.receiver_id) === state.me.userId) ||
-            (Number(m.sender_id) === state.me.userId && Number(m.receiver_id) === state.activeOtherId);
+        for(const d of dialogs){
+          const el = document.createElement("div");
+          el.className = "dialog" + (d.other_id === currentWith ? " active" : "");
+          const who = d.nickname ? d.nickname : d.email;
 
-          // show toast if new message not in active dialog
-          const fromOther = Number(m.sender_id) !== state.me.userId ? Number(m.sender_id) : Number(m.receiver_id);
-          if (!inThisDialog && Number(m.sender_id) !== state.me.userId) {
-            const last = state.lastToastByDialog.get(fromOther) || 0;
-            const now = Date.now();
-            if (now - last > 1200) {
-              state.lastToastByDialog.set(fromOther, now);
-              toast("Новое сообщение", "Пришло сообщение в другом чате");
-            }
-          }
+          el.innerHTML = `
+            <div class="top">
+              <div class="who">${escapeHtml(who)}</div>
+              <div class="meta">${escapeHtml(fmtTime(d.last_created_at))}</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+              <div style="color:rgba(255,255,255,.60);font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px">
+                ${escapeHtml(d.last_text)}
+              </div>
+              ${d.unread_count > 0 ? `<div class="badge">${d.unread_count}</div>` : ``}
+            </div>
+          `;
 
-          // refresh dialogs (unread badges)
-          fetchDialogs().catch(()=>{});
+          el.onclick = () => openDialog({ id: d.other_id, email: d.email, nickname: d.nickname });
+          dialogsEl.appendChild(el);
+        }
+      }catch(e){
+        // ignore
+      }
+    }
 
-          if (inThisDialog) {
-            // fetch thread to keep reply join consistent
-            await fetchThread(state.activeOtherId);
-          }
+    async function loadThread(withUser, scrollToBottom){
+      try{
+        const r = await api(`/api/messages/thread?me=${me}&with=${withUser}`);
+        const msgs = r.messages || [];
+
+        chatBody.innerHTML = "";
+        setEmptyHint(msgs.length === 0);
+
+        for(const m of msgs){
+          const node = renderMessage(m);
+          chatBody.appendChild(node);
         }
 
-        if (data.type === "message:delete") {
-          const id = Number(data.messageId);
-          // remove from UI with animation if exists
-          const el = document.querySelector(`.msg[data-mid="${id}"]`);
-          if (el && !el.classList.contains("deleting")) el.classList.add("deleting");
-          await sleep(180);
+        if(scrollToBottom) chatBody.scrollTop = chatBody.scrollHeight;
 
-          // refresh thread
-          if (state.activeOtherId) await fetchThread(state.activeOtherId);
-          fetchDialogs().catch(()=>{});
+        // mark read if we are in this thread
+        if(msgs.length){
+          const lastId = msgs[msgs.length-1].id;
+          await api("/api/read", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify({ userId: me, otherId: withUser, lastReadMessageId: lastId })
+          }).catch(()=>{});
         }
+      }catch(e){
+        // ignore
+      }
+    }
 
-        if (data.type === "profile:update") {
-          // if it's me -> reload my profile pane values
-          if (Number(data.userId) === state.me.userId) {
-            loadMyProfile().catch(()=>{});
-          }
-          fetchDialogs().catch(()=>{});
-        }
+    function renderMessage(m){
+      const wrap = document.createElement("div");
+      wrap.className = "msg " + (m.sender_id === me ? "me" : "");
+      wrap.dataset.id = m.id;
 
-        if (data.type && data.type.startsWith("call:")) {
-          // demo calls
-          const title = data.type === "call:incoming" ? "Входящий звонок" : "Звонок";
-          toast(title, data.note || "—");
-          addCallLog(data);
-        }
+      const replyHtml = m.reply_to_message_id ? `
+        <div class="reply-preview">
+          Ответ на #${escapeHtml(m.reply_to_message_id)}
+          <span class="small">${escapeHtml(m.reply_text || "")}</span>
+        </div>
+      ` : "";
+
+      wrap.innerHTML = `
+        ${replyHtml}
+        <div class="text">${renderRichText(m.text)}</div>
+        <div class="time">${escapeHtml(fmtTime(m.created_at))} • id:${escapeHtml(m.id)}</div>
+      `;
+
+      // context menu
+      wrap.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        showContextMenu(e.clientX, e.clientY, m);
+      });
+
+      return wrap;
+    }
+
+    function showContextMenu(x, y, m){
+      ctx.classList.add("show");
+      ctx.style.left = x + "px";
+      ctx.style.top = y + "px";
+
+      ctxReply.onclick = () => {
+        replyTo = m;
+        showToast("Ответ", `Ответ на #${m.id}`, 1600);
+        ctx.classList.remove("show");
+        msgText.focus();
       };
-    } catch {
-      // ignore
+
+      ctxDelete.onclick = async () => {
+        ctx.classList.remove("show");
+        await deleteMessage(m.id);
+      };
+    }
+
+    async function deleteMessage(messageId){
+      try{
+        const node = chatBody.querySelector(`.msg[data-id="${messageId}"]`);
+        if(node){
+          node.classList.add("deleting");
+          setTimeout(()=> node.remove(), 520);
+        }
+        await api(`/api/messages/${messageId}?requesterId=${me}`, { method:"DELETE" });
+        showToast("Удалено", "Сообщение удалено для обоих", 1800);
+      }catch(ex){
+        showToast("Ошибка", ex.message, 2400);
+      }
+    }
+
+    async function sendMessage(){
+      if(!currentWith){
+        showToast("Чаты", "Сначала выбери диалог слева 🙂", 2200);
+        return;
+      }
+      const text = msgText.value.trim();
+      if(!text) return;
+
+      const payload = {
+        senderId: me,
+        receiverId: currentWith,
+        text,
+        replyToMessageId: replyTo ? replyTo.id : null
+      };
+
+      try{
+        await api("/api/messages/send", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        msgText.value = "";
+        replyTo = null;
+
+        // refresh
+        await loadThread(currentWith, true);
+        await refreshDialogs(true);
+      }catch(ex){
+        showToast("Ошибка", ex.message, 2600);
+      }
+    }
+
+    async function markReadCurrent(){
+      try{
+        const last = chatBody.querySelector(".msg:last-child");
+        if(!last) return;
+        const mid = Number(last.dataset.id);
+        if(!mid) return;
+        await api("/api/read", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ userId: me, otherId: currentWith, lastReadMessageId: mid })
+        });
+      }catch{}
+    }
+
+    function showToast(t1, t2, ms){
+      toast.classList.remove("fadeout");
+      toast.classList.add("show");
+      toastT1.textContent = t1;
+      toastT2.textContent = t2;
+
+      const bar = toast.querySelector(".bar > div");
+      // restart animation
+      bar.style.animation = "none";
+      bar.offsetHeight; // reflow
+      bar.style.animation = `toastBar ${Math.max(1500, ms||4000)}ms linear forwards`;
+
+      setTimeout(() => {
+        toast.classList.add("fadeout");
+        setTimeout(()=> toast.classList.remove("show","fadeout"), 1500);
+      }, ms || 4000);
+    }
+
+    function updateFormatBar(){
+      const a = msgText.selectionStart;
+      const b = msgText.selectionEnd;
+      const has = (typeof a === "number" && typeof b === "number" && b > a);
+      const bar = $("formatBar");
+      if(has) bar.classList.add("show");
+      else bar.classList.remove("show");
+    }
+
+    function applyFormat(kind){
+      const a = msgText.selectionStart;
+      const b = msgText.selectionEnd;
+      if(b <= a) return;
+
+      const before = msgText.value.slice(0, a);
+      const sel = msgText.value.slice(a, b);
+      const after = msgText.value.slice(b);
+
+      const tagOpen = `<${kind}>`;
+      const tagClose = `</${kind}>`;
+
+      msgText.value = before + tagOpen + sel + tagClose + after;
+
+      // set selection around same text
+      const newStart = a + tagOpen.length;
+      const newEnd = newStart + sel.length;
+      msgText.setSelectionRange(newStart, newEnd);
+    }
+
+    function setupWebSocket(){
+      // optional; if WS fails - app still works by polling
+      try{
+        const proto = location.protocol === "https:" ? "wss" : "ws";
+        const ws = new WebSocket(`${proto}://${location.host}/ws?userId=${me}`);
+        ws.onmessage = async (e) => {
+          try{
+            const msg = JSON.parse(e.data);
+            if(msg.type === "message:new"){
+              const m = msg.message;
+              // if message belongs to current thread -> reload thread
+              if(currentWith && (m.sender_id === currentWith || m.receiver_id === currentWith)){
+                await loadThread(currentWith, false);
+              }
+              await refreshDialogs(false);
+            }
+            if(msg.type === "message:delete"){
+              const node = chatBody.querySelector(`.msg[data-id="${msg.messageId}"]`);
+              if(node){
+                node.classList.add("deleting");
+                setTimeout(()=> node.remove(), 520);
+              }
+              await refreshDialogs(false);
+            }
+            if(msg.type === "profile:update"){
+              // can refresh dialogs names
+              await refreshDialogs(false);
+            }
+          }catch{}
+        };
+      }catch{}
     }
   }
 
-  function addCallLog(ev) {
-    const U = ui();
-    if (!U.callsLog) return;
-    const item = document.createElement("div");
-    item.className = "call-item";
-    item.textContent = `${new Date().toLocaleTimeString("ru-RU")} • ${ev.type} • ${ev.note || ""}`;
-    U.callsLog.prepend(item);
-  }
-
-  // ---------- Calls (demo) ----------
-  async function startCall() {
-    if (!state.activeOtherId) return;
-    try {
-      // if your server has /api/call/start — it will work; if not, just toast
-      await api("/api/call/start", {
-        method: "POST",
-        body: JSON.stringify({ fromId: state.me.userId, toId: state.activeOtherId })
-      });
-      toast("Звонок", "Запрос на звонок отправлен (демо)");
-    } catch {
-      toast("Звонок (демо)", "Сервер ещё без звонков — сделаем дальше");
-    }
-  }
-
-  // ---------- Init chat ----------
-  async function initChat() {
-    state.me = requireAuth();
-    if (!state.me) return;
-
-    const U = ui();
-
-    // init theme
-    initTheme();
-
-    // fade
-    setFadeIn();
-
-    // logout
-    U.btnLogout?.addEventListener("click", () => {
-      store.clearAuth();
-      location.href = "login.html";
-    });
-
-    // tabs
-    U.tabChats?.addEventListener("click", () => setView("chats"));
-    U.tabCalls?.addEventListener("click", () => setView("calls"));
-
-    // settings
-    U.btnSettings?.addEventListener("click", () => openModal());
-    U.modalClose?.addEventListener("click", closeModal);
-    U.modalBackdrop?.addEventListener("click", closeModal);
-
-    U.openThemes?.addEventListener("click", () => showPane("themes"));
-    U.openProfile?.addEventListener("click", async () => {
-      showPane("profile");
-      await loadMyProfile();
-    });
-
-    // theme chips
-    $$(".chip[data-theme]").forEach(btn => {
-      btn.addEventListener("click", () => applyTheme(btn.dataset.theme));
-    });
-
-    // edit nickname
-    U.editNick?.addEventListener("click", async () => {
-      const current = (U.myNick.textContent || "").trim();
-      const nn = prompt("Новый никнейм:", current === "—" ? "" : current);
-      if (nn == null) return;
-      try {
-        const r = await api("/api/profile/nickname", {
-          method: "POST",
-          body: JSON.stringify({ userId: state.me.userId, nickname: nn })
-        });
-        toast("Никнейм обновлён ✅", r.nickname);
-        await loadMyProfile();
-        // also update local
-        const me = store.get("fb_user", {});
-        me.nickname = r.nickname;
-        store.set("fb_user", me);
-      } catch (e) {
-        toast("Ошибка", e.message);
-      }
-    });
-
-    // add phone
-    U.addPhone?.addEventListener("click", async () => {
-      const phone = prompt("Введите номер телефона:", "");
-      if (phone == null) return;
-      try {
-        const r = await api("/api/profile/phone", {
-          method: "POST",
-          body: JSON.stringify({ userId: state.me.userId, phone })
-        });
-        toast("Телефон добавлен ✅", r.phone);
-        await loadMyProfile();
-      } catch (e) {
-        toast("Ошибка", e.message);
-      }
-    });
-
-    // open other user card by clicking name in chat header
-    U.btnOpenUserCard?.addEventListener("click", async () => {
-      if (!state.activeOtherId) return;
-      openModal();
-      showPane("user");
-      try {
-        await loadOtherProfile(state.activeOtherId);
-      } catch (e) {
-        toast("Ошибка", e.message);
-      }
-    });
-
-    // calls
-    U.btnCall?.addEventListener("click", startCall);
-
-    // add user button -> just run search now
-    U.btnAddUser?.addEventListener("click", () => {
-      trySearchUser().catch(e => {
-        U.searchError.textContent = e.message;
-        U.searchError.classList.add("show");
-      });
-    });
-
-    bindSearchInputs();
-
-    // refresh
-    U.btnRefresh?.addEventListener("click", async () => {
-      await fetchDialogs();
-      if (state.activeOtherId) await fetchThread(state.activeOtherId);
-    });
-
-    // done
-    U.btnDone?.addEventListener("click", () => toast("Ок", "Готово 😄"));
-
-    // editor
-    setupEditor();
-
-    // send
-    U.btnSend?.addEventListener("click", () => {
-      sendMessage().catch(e => toast("Ошибка", e.message));
-    });
-
-    // reply cancel
-    U.replyCancel?.addEventListener("click", () => setReply(null));
-
-    // ctx handlers
-    document.addEventListener("click", (e) => {
-      // close ctx if click outside
-      const U2 = ui();
-      if (!U2.ctx) return;
-      if (!U2.ctx.classList.contains("hidden") && !U2.ctx.contains(e.target)) closeCtx();
-    });
-    document.addEventListener("scroll", closeCtx, true);
-    window.addEventListener("resize", closeCtx);
-
-    U.ctxReply?.addEventListener("click", () => {
-      if (!ctxMsg) return;
-      setReply(ctxMsg);
-      closeCtx();
-      ui().editor?.focus();
-    });
-
-    U.ctxDelete?.addEventListener("click", () => {
-      if (!ctxMsg) return;
-      deleteMsg(ctxMsg).catch(e => toast("Ошибка", e.message));
-      closeCtx();
-    });
-
-    // start
-    showChatArea(false);
-    await fetchDialogs();
-    connectWS();
-
-    // auto refresh dialogs ~0.5s (как ты хотел)
-    setInterval(() => {
-      fetchDialogs().catch(()=>{});
-    }, 500);
-  }
-
-  // ---------- Boot ----------
-  document.addEventListener("DOMContentLoaded", () => {
-    initTheme();
-    setFadeIn();
-
-    const page = document.body?.dataset?.page;
-    if (page === "register") initRegister();
-    if (page === "login") initLogin();
-    if (page === "chat") initChat();
-  });
-
+  return { initAuthPage, initChatPage };
 })();
