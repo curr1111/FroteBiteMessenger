@@ -1,15 +1,33 @@
 {
   "name": "frotebitemessenger",
   "version": "1.0.0",
-  "main": "server.js",
+  "description": "Frote Messenger Desktop",
+  "main": "main.js",
+  "author": "curr1111",
+  "license": "MIT",
   "scripts": {
-    "start": "node server.js"
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^28.2.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.frote.messenger",
+    "productName": "Frote Messenger",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis"
+    }
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "sqlite3": "^5.1.7",
+    "sqlite3": "^6.0.1",
     "ws": "^8.19.0"
   }
 }

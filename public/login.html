@@ -7,51 +7,54 @@
   <link rel="stylesheet" href="brand.css"/>
 </head>
 <body class="theme-ember">
-  <div class="fade-in"></div>
+  <div id="splash" class="splash">
+    <div class="splash-inner">
+      <img src="logo.svg" alt="logo" class="splash-logo"/>
+      <div class="splash-title">FroteBiteMessenger</div>
+    </div>
+  </div>
 
   <div class="auth-wrap">
-    <div class="auth panel">
-      <div class="auth-left">
+    <div class="auth-card">
+      <div class="auth-side auth-side-left">
         <div class="brand">
-          <img src="logo.svg" alt="FroteBite"/>
-          <div class="brand-title">
-            <div class="name">FroteBiteMessenger</div>
-            <div class="sub">Вход</div>
+          <img src="logo.svg" alt="logo"/>
+          <div class="brand-text">
+            <div class="brand-name">FroteBiteMessenger</div>
+            <div class="brand-sub">Вход</div>
           </div>
         </div>
 
         <h1>Войти</h1>
-        <p>Введи почту и пароль — и ты в чатах.</p>
-
-        <div class="helper">
-          Нет аккаунта? <a href="register.html">Зарегистрироваться</a>
+        <p>Введи почту и пароль — и переходи в FroteBiteMessenger.</p>
+        <div class="auth-note">
+          Нет аккаунта?
+          <a href="register.html">Зарегистрироваться</a>
         </div>
       </div>
 
-      <div class="auth-right">
-        <form id="loginForm">
-          <div class="field">
-            <label>Почта</label>
-            <input id="logEmail" class="input" type="email" placeholder="you@mail.com" autocomplete="email" required/>
+      <div class="auth-side auth-side-right">
+        <form id="loginForm" class="auth-form">
+          <label>Почта</label>
+          <input id="logEmail" class="input" type="email" placeholder="you@mail.com" required/>
+
+          <label>Пароль</label>
+          <input id="logPass" class="input" type="password" placeholder="********" required/>
+
+          <div class="auth-actions">
+            <button type="submit" class="btn btn-primary">Войти</button>
+            <button type="button" id="toRegister" class="btn btn-secondary">Регистрация</button>
           </div>
 
-          <div class="field">
-            <label>Пароль</label>
-            <input id="logPass" class="input" type="password" placeholder="********" autocomplete="current-password" required/>
-          </div>
-
-          <div class="row">
-            <button class="btn primary" type="submit">Войти</button>
-            <button class="btn" type="button" id="toRegister">Регистрация</button>
-          </div>
-
-          <div id="logErr" class="error"></div>
+          <div id="logErr" class="form-error"></div>
         </form>
       </div>
     </div>
   </div>
 
   <script src="brand.js"></script>
-  <script>FB.initAuthPage("login");</script>
+  <script>
+    FB.initAuthPage("login");
+  </script>
 </body>
 </html>

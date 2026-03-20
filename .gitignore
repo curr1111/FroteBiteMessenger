@@ -6,3 +6,6 @@ db.sqlite
 .vs/
 public/.vs/
 **/*.vsidx
+
+dist/
+*.exe

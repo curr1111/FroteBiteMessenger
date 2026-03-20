@@ -7,51 +7,54 @@
   <link rel="stylesheet" href="brand.css"/>
 </head>
 <body class="theme-ember">
-  <div class="fade-in"></div>
+  <div id="splash" class="splash">
+    <div class="splash-inner">
+      <img src="logo.svg" alt="logo" class="splash-logo"/>
+      <div class="splash-title">FroteBiteMessenger</div>
+    </div>
+  </div>
 
   <div class="auth-wrap">
-    <div class="auth panel">
-      <div class="auth-left">
+    <div class="auth-card">
+      <div class="auth-side auth-side-left">
         <div class="brand">
-          <img src="logo.svg" alt="FroteBite"/>
-          <div class="brand-title">
-            <div class="name">FroteBiteMessenger</div>
-            <div class="sub">Регистрация</div>
+          <img src="logo.svg" alt="logo"/>
+          <div class="brand-text">
+            <div class="brand-name">FroteBiteMessenger</div>
+            <div class="brand-sub">Регистрация</div>
           </div>
         </div>
 
         <h1>Создай аккаунт</h1>
-        <p>Почта + пароль. Данные хранятся в SQLite на сервере.</p>
-
-        <div class="helper">
-          Уже есть аккаунт? <a href="login.html">Войти</a>
+        <p>Почта + пароль. Потом сможешь переписываться, смотреть каналы и звонить.</p>
+        <div class="auth-note">
+          Уже есть аккаунт?
+          <a href="login.html">Войти</a>
         </div>
       </div>
 
-      <div class="auth-right">
-        <form id="registerForm">
-          <div class="field">
-            <label>Почта</label>
-            <input id="regEmail" class="input" type="email" placeholder="you@mail.com" autocomplete="email" required/>
+      <div class="auth-side auth-side-right">
+        <form id="registerForm" class="auth-form">
+          <label>Почта</label>
+          <input id="regEmail" class="input" type="email" placeholder="you@mail.com" required/>
+
+          <label>Пароль (минимум 8 символов)</label>
+          <input id="regPass" class="input" type="password" placeholder="********" required/>
+
+          <div class="auth-actions">
+            <button type="submit" class="btn btn-primary">Зарегистрироваться</button>
+            <button type="button" id="toLogin" class="btn btn-secondary">Уже есть аккаунт</button>
           </div>
 
-          <div class="field">
-            <label>Пароль (минимум 8 символов)</label>
-            <input id="regPass" class="input" type="password" placeholder="********" autocomplete="new-password" required/>
-          </div>
-
-          <div class="row">
-            <button class="btn primary" type="submit">Зарегистрироваться</button>
-            <button class="btn" type="button" id="toLogin">Уже есть аккаунт</button>
-          </div>
-
-          <div id="regErr" class="error"></div>
+          <div id="regErr" class="form-error"></div>
         </form>
       </div>
     </div>
   </div>
 
   <script src="brand.js"></script>
-  <script>FB.initAuthPage("register");</script>
+  <script>
+    FB.initAuthPage("register");
+  </script>
 </body>
 </html>
